@@ -1,0 +1,4517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>数据展示页</title>
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- 引入 Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- 引入 Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    #map {
+      width: 100%;
+      height: clamp(250px, 40vh, 400px);
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      margin-top: 15px;
+      overflow: hidden;
+    }
+
+    /* 统计面板样式 */
+    .statistics-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+
+    .stat-card {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      text-align: center;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #4facfe, #00f2fe);
+      border-radius: 16px 16px 0 0;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .stat-card.danger::before {
+      background: linear-gradient(90deg, #ff416c, #ff4b2b);
+    }
+
+    .stat-card.warning::before {
+      background: linear-gradient(90deg, #f7971e, #ffd200);
+    }
+
+    .stat-card.success::before {
+      background: linear-gradient(90deg, #56ab2f, #a8e6cf);
+    }
+
+    .stat-icon {
+      font-size: 2rem; /* 从 2.5rem 减小 */
+      margin-bottom: 12px;
+      display: block;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+    }
+
+    .stat-label {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 8px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #ffffff;
+      margin-bottom: 8px;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .stat-unit {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-left: 4px;
+    }
+
+    /* 数据可视化图表样式 */
+    .charts-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+      margin: 20px 0;
+    }
+
+    .chart-card {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+
+    .chart-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .chart-title {
+      color: #ffffff;
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-canvas {
+      height: 300px;
+      position: relative;
+    }
+
+    .daily-stats-container {
+      grid-column: 1 / -1;
+    }
+
+    .daily-stats-container .chart-canvas {
+      height: 250px;
+    }
+
+    @media (max-width: 768px) {
+      .charts-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .stat-trend {
+      font-size: 0.8rem;
+      padding: 4px 8px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      margin-top: 8px;
+      display: inline-block;
+    }
+
+    .stat-trend.up {
+      color: #ff6b6b;
+    }
+
+    .stat-trend.down {
+      color: #4ecdc4;
+    }
+
+    .stat-trend.neutral {
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .stat-info {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 10px;
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .stat-info span {
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+    }
+
+    #batteryCard::before {
+      background: linear-gradient(90deg, 
+        var(--battery-color-start, #4facfe), 
+        var(--battery-color-end, #00f2fe));
+    }
+
+    /* 数据动画效果 */
+    .stat-value.updating {
+      animation: valueUpdate 0.5s ease;
+    }
+
+    @keyframes valueUpdate {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.1); color: #4facfe; }
+      100% { transform: scale(1); }
+    }
+
+    /* 统计面板标题 */
+    .statistics-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding: 0 8px;
+    }
+
+    .statistics-title {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .statistics-title .title-icon {
+      font-size: 1.4rem; /* 从 1.6rem 减小 */
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    }
+
+    .refresh-btn {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border: none;
+      border-radius: 10px;
+      padding: 8px 16px;
+      color: white;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+    }
+
+    .refresh-btn:active {
+      transform: translateY(0);
+    }
+
+    .refresh-btn.spinning {
+      pointer-events: none;
+    }
+
+    .refresh-btn.spinning .refresh-icon {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* 天气分析卡片样式 - 优化版本 */
+    .weather-card {
+      background: linear-gradient(135deg, 
+        rgba(135, 206, 235, 0.15), 
+        rgba(70, 130, 180, 0.1),
+        rgba(30, 144, 255, 0.05));
+      border: 1px solid rgba(135, 206, 235, 0.3);
+      border-radius: 20px;
+      padding: 28px;
+      backdrop-filter: blur(20px);
+      margin-bottom: 25px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 
+        0 25px 60px rgba(30, 144, 255, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* 顶部渐变条带动画 */
+    .weather-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 5px;
+      background: linear-gradient(90deg, #87ceeb, #4682b4, #1e90ff, #00bfff);
+      border-radius: 20px 20px 0 0;
+      background-size: 200% 100%;
+      animation: weatherGradient 4s ease-in-out infinite;
+      z-index: 2;
+    }
+    
+    /* 添加光扫效果 - 这是关键部分 */
+    .weather-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.2), 
+        rgba(135, 206, 235, 0.3),
+        rgba(255, 255, 255, 0.2),
+        transparent);
+      transition: left 0.8s ease;
+      z-index: 1;
+    }
+    
+    @keyframes weatherGradient {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+    
+    .weather-card:hover {
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: 
+        0 35px 80px rgba(30, 144, 255, 0.25),
+        0 0 0 1px rgba(135, 206, 235, 0.4),
+        0 0 40px rgba(135, 206, 235, 0.3),
+        0 0 60px rgba(30, 144, 255, 0.2);
+      border-color: rgba(135, 206, 235, 0.5);
+    }
+    
+    .weather-card:hover::after {
+      left: 100%;
+    }
+
+    .weather-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 25px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .weather-title {
+      font-size: 1.3rem; /* 从 1.5rem 减小 */
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px; /* 从 15px 减小 */
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+      line-height: 1.2; /* 增加行高控制 */
+      flex-wrap: nowrap; /* 防止换行 */
+    }
+
+    .weather-title .weather-icon {
+      font-size: 1.3rem; /* 从 2rem 大幅减小 */
+      animation: weatherFloat 3s ease-in-out infinite;
+      filter: drop-shadow(0 0 6px rgba(135, 206, 235, 0.8));
+      flex-shrink: 0; /* 防止图标被压缩 */
+      width: 1.3rem; /* 固定宽度 */
+      height: 1.3rem; /* 固定高度 */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @keyframes weatherFloat {
+      0%, 100% { transform: translateY(0px) rotate(0deg); }
+      25% { transform: translateY(-2px) rotate(-1deg); } /* 从 -3px -2deg 减小 */
+      50% { transform: translateY(-3px) rotate(0deg); } /* 从 -5px 减小 */
+      75% { transform: translateY(-2px) rotate(1deg); } /* 从 -3px 2deg 减小 */
+    }
+
+    .weather-refresh-btn {
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+      border: none;
+      border-radius: 12px;
+      padding: 10px 20px;
+      color: white;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+    }
+
+    .weather-refresh-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4);
+      background: linear-gradient(135deg, #5fbdff, #1ff3fe);
+    }
+
+    /* 地理位置设置区域优化 */
+    .location-settings {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.12), 
+        rgba(255, 255, 255, 0.08));
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+    }
+
+    .location-input {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .location-input input {
+      padding: 12px 16px;
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .location-input input:focus {
+      outline: none;
+      border-color: rgba(79, 172, 254, 0.6);
+      background: rgba(255, 255, 255, 0.15);
+      box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.2);
+    }
+
+    .location-btn {
+      padding: 12px 18px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, rgba(79, 172, 254, 0.3), rgba(0, 242, 254, 0.2));
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .location-btn:hover {
+      background: linear-gradient(135deg, rgba(79, 172, 254, 0.5), rgba(0, 242, 254, 0.3));
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(79, 172, 254, 0.3);
+    }
+
+    /* 城市快捷按钮优化 */
+    .city-shortcuts {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .city-shortcut {
+      padding: 8px 16px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1));
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .city-shortcut::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+      transition: left 0.5s ease;
+    }
+
+    .city-shortcut:hover::before {
+      left: 100%;
+    }
+
+    .city-shortcut:hover {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.25), rgba(255, 255, 255, 0.15));
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    .city-shortcut.active {
+      background: linear-gradient(135deg, rgba(79, 172, 254, 0.4), rgba(0, 242, 254, 0.3));
+      border-color: rgba(79, 172, 254, 0.6);
+      box-shadow: 0 0 20px rgba(79, 172, 254, 0.3);
+    }
+
+    /* 天气内容区域优化 */
+    .weather-content {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 30px;
+      margin-top: 10px;
+    }
+
+    .current-weather {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 20px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .weather-main-icon {
+      font-size: 4rem; /* 从 5rem 减小 */
+      margin-bottom: 15px;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3)); /* 从 6px 12px 减小 */
+      animation: weatherPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes weatherPulse {
+      0%, 100% { transform: scale(1) rotate(0deg); }
+      25% { transform: scale(1.05) rotate(-2deg); }
+      50% { transform: scale(1.1) rotate(0deg); }
+      75% { transform: scale(1.05) rotate(2deg); }
+    }
+
+    .temperature {
+      font-size: 3.5rem;
+      font-weight: 800;
+      color: #ffffff;
+      text-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+      margin-bottom: 10px;
+      background: linear-gradient(45deg, #ffffff, #e3f2fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .weather-description {
+      font-size: 1.2rem;
+      color: rgba(255, 255, 255, 0.9);
+      margin-bottom: 20px;
+      font-weight: 600;
+      padding: 8px 20px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(5px);
+    }
+
+    .weather-details {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    .weather-detail-item {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.1));
+      border-radius: 14px;
+      padding: 14px;
+      text-align: center;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .weather-detail-item::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #4facfe, #00f2fe);
+      transform: scaleX(0);
+      transition: transform 0.3s ease;
+    }
+
+    .weather-detail-item:hover::before {
+      transform: scaleX(1);
+    }
+
+    .weather-detail-item:hover {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.15));
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    }
+
+    .detail-icon {
+      font-size: 1.4rem; /* 从 1.8rem 减小 */
+      margin-bottom: 8px;
+      display: block;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    }
+
+    .detail-label {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .detail-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #ffffff;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    /* 状态指示器优化 */
+    .weather-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      margin-top: 12px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      backdrop-filter: blur(5px);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: currentColor;
+      animation: statusPulse 2s infinite;
+      box-shadow: 0 0 10px currentColor;
+    }
+
+    .weather-status.online {
+      color: #4caf50;
+      border: 1px solid rgba(76, 175, 80, 0.3);
+    }
+
+    .weather-status.offline {
+      color: #ff9800;
+      border: 1px solid rgba(255, 152, 0, 0.3);
+    }
+
+    .weather-status.error {
+      color: #f44336;
+      border: 1px solid rgba(244, 67, 54, 0.3);
+    }
+
+    /* API信息显示优化 */
+    .api-info {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.6);
+      text-align: right;
+      margin-top: 10px;
+      font-style: italic;
+    }
+
+    .riding-analysis {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .safety-assessment {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .safety-assessment.safe {
+      border-left: 4px solid #4caf50;
+    }
+
+    .safety-assessment.warning {
+      border-left: 4px solid #ff9800;
+    }
+
+    .safety-assessment.danger {
+      border-left: 4px solid #f44336;
+    }
+
+    .assessment-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .assessment-icon {
+      font-size: 1rem;
+    }
+
+    .assessment-level {
+      font-weight: bold;
+      font-size: 1rem;
+    }
+
+    .assessment-description {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.8);
+      line-height: 1.4;
+    }
+
+    .weather-warning {
+      background: linear-gradient(135deg, rgba(244, 67, 54, 0.2), rgba(244, 67, 54, 0.1));
+      border: 1px solid rgba(244, 67, 54, 0.3);
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 8px;
+      animation: warningPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes warningPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.8; }
+    }
+
+    .warning-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .warning-text {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.9);
+    }
+
+    .riding-recommendations {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .recommendations-header {
+      font-size: 1rem;
+      font-weight: bold;
+      color: #ffffff;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .recommendation-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .recommendation-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 0;
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .recommendation-icon {
+      font-size: 1rem;
+      width: 16px;
+      text-align: center;
+    }
+
+    .best-time-section {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .best-time-header {
+      font-size: 1rem;
+      font-weight: bold;
+      color: #ffffff;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .time-slots {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 8px;
+    }
+
+    .time-slot {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 0.8rem;
+      transition: all 0.3s ease;
+    }
+
+    .time-slot.excellent {
+      background: rgba(76, 175, 80, 0.3);
+      border: 1px solid rgba(76, 175, 80, 0.5);
+    }
+
+    .time-slot.good {
+      background: rgba(255, 193, 7, 0.3);
+      border: 1px solid rgba(255, 193, 7, 0.5);
+    }
+
+    .time-slot.poor {
+      background: rgba(244, 67, 54, 0.3);
+      border: 1px solid rgba(244, 67, 54, 0.5);
+    }
+
+    .slot-time {
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+
+    .slot-condition {
+      font-size: 0.7rem;
+      opacity: 0.8;
+    }
+
+    /* 高德天气API状态指示器 */
+    .weather-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.7);
+      margin-top: 8px;
+    }
+
+    .weather-status.online {
+      color: #4caf50;
+    }
+
+    .weather-status.offline {
+      color: #ff9800;
+    }
+
+    .weather-status.error {
+      color: #f44336;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: currentColor;
+      animation: statusPulse 2s infinite;
+    }
+
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* 城市设置区域 */
+    .location-settings {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .location-input {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .location-input input {
+      flex: 1;
+      min-width: 200px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 0.9rem;
+    }
+
+    .location-input input::placeholder {
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .location-btn {
+      padding: 8px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(79, 172, 254, 0.2);
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.3s ease;
+      border: none;
+    }
+
+    .location-btn:hover {
+      background: rgba(79, 172, 254, 0.3);
+      transform: translateY(-1px);
+    }
+
+    .location-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* 城市选择快捷按钮 */
+    .city-shortcuts {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .city-shortcut {
+      padding: 4px 12px;
+      font-size: 0.8rem;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      color: #fff;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .city-shortcut:hover {
+      background: rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .city-shortcut.active {
+      background: rgba(79, 172, 254, 0.3);
+      border-color: rgba(79, 172, 254, 0.5);
+    }
+
+    /* API信息显示 */
+    .api-info {
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+      text-align: right;
+      margin-top: 8px;
+    }
+
+    /* ========== 骑行安全建议卡片增强优化 ========== */
+    .recommendation-card {
+      background: linear-gradient(135deg, 
+        rgba(138, 43, 226, 0.15), 
+        rgba(255, 20, 147, 0.1), 
+        rgba(79, 172, 254, 0.08),
+        rgba(255, 255, 255, 0.05));
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border-radius: 24px;
+      border: 1px solid rgba(138, 43, 226, 0.3);
+      padding: 32px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 
+        0 30px 80px rgba(138, 43, 226, 0.2),
+        0 0 0 1px rgba(255, 255, 255, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: cardSlideUp 1s ease-out;
+    }
+
+    /* 动态顶部渐变条 */
+    .recommendation-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 6px;
+      background: linear-gradient(90deg, 
+        #8a2be2, #ff1493, #4facfe, #00f2fe, #ff6b35, #ffd23f);
+      border-radius: 24px 24px 0 0;
+      background-size: 300% 100%;
+      animation: recommendationGradient 5s ease-in-out infinite;
+      z-index: 2;
+      opacity: 0.9;
+    }
+
+    /* 光扫效果增强 */
+    .recommendation-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -150%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(120deg, 
+        transparent 30%, 
+        rgba(255, 255, 255, 0.15) 45%,
+        rgba(138, 43, 226, 0.25) 50%,
+        rgba(255, 20, 147, 0.2) 55%,
+        rgba(255, 255, 255, 0.15) 70%,
+        transparent 85%);
+      transform: skewX(-25deg);
+      transition: left 1s ease;
+      z-index: 1;
+    }
+
+    .recommendation-card:hover::after {
+      left: 150%;
+    }
+
+    @keyframes recommendationGradient {
+      0%, 100% { background-position: 0% 50%; }
+      25% { background-position: 50% 50%; }
+      50% { background-position: 100% 50%; }
+      75% { background-position: 150% 50%; }
+    }
+
+    /* 悬停效果增强 */
+    .recommendation-card:hover {
+      transform: translateY(-12px) scale(1.03);
+      box-shadow: 
+        0 45px 100px rgba(138, 43, 226, 0.35),
+        0 0 0 2px rgba(255, 20, 147, 0.4),
+        0 0 60px rgba(138, 43, 226, 0.4),
+        0 0 80px rgba(255, 20, 147, 0.3),
+        0 0 100px rgba(79, 172, 254, 0.2);
+      border-color: rgba(255, 20, 147, 0.6);
+    }
+
+    /* 优先级状态样式 */
+    .recommendation-card.priority-safe {
+      border-color: rgba(16, 185, 129, 0.4);
+      background: linear-gradient(135deg, 
+        rgba(16, 185, 129, 0.15), 
+        rgba(52, 211, 153, 0.1), 
+        rgba(255, 255, 255, 0.05));
+    }
+
+    .recommendation-card.priority-safe::before {
+      background: linear-gradient(90deg, 
+        #10b981, #34d399, #6ee7b7, #a7f3d0, #d1fae5);
+      background-size: 200% 100%;
+      animation: safeGradient 4s ease-in-out infinite;
+    }
+
+    .recommendation-card.priority-safe:hover {
+      box-shadow: 
+        0 45px 100px rgba(16, 185, 129, 0.35),
+        0 0 0 2px rgba(52, 211, 153, 0.5),
+        0 0 60px rgba(16, 185, 129, 0.4);
+      border-color: rgba(52, 211, 153, 0.6);
+    }
+
+    .recommendation-card.priority-warning {
+      border-color: rgba(245, 158, 11, 0.4);
+      background: linear-gradient(135deg, 
+        rgba(245, 158, 11, 0.15), 
+        rgba(251, 191, 36, 0.1), 
+        rgba(255, 255, 255, 0.05));
+    }
+
+    .recommendation-card.priority-warning::before {
+      background: linear-gradient(90deg, 
+        #f59e0b, #fbbf24, #fcd34d, #fde68a, #fef3c7);
+      background-size: 200% 100%;
+      animation: warningGradient 3s ease-in-out infinite;
+    }
+
+    .recommendation-card.priority-warning:hover {
+      box-shadow: 
+        0 45px 100px rgba(245, 158, 11, 0.35),
+        0 0 0 2px rgba(251, 191, 36, 0.5),
+        0 0 60px rgba(245, 158, 11, 0.4);
+      border-color: rgba(251, 191, 36, 0.6);
+    }
+
+    .recommendation-card.priority-danger {
+      border-color: rgba(239, 68, 68, 0.4);
+      background: linear-gradient(135deg, 
+        rgba(239, 68, 68, 0.15), 
+        rgba(248, 113, 113, 0.1), 
+        rgba(255, 255, 255, 0.05));
+    }
+
+    .recommendation-card.priority-danger::before {
+      background: linear-gradient(90deg, 
+        #ef4444, #f87171, #fca5a5, #fecaca, #fee2e2);
+      background-size: 200% 100%;
+      animation: dangerGradient 2s ease-in-out infinite;
+    }
+
+    .recommendation-card.priority-danger:hover {
+      box-shadow: 
+        0 45px 100px rgba(239, 68, 68, 0.35),
+        0 0 0 2px rgba(248, 113, 113, 0.5),
+        0 0 60px rgba(239, 68, 68, 0.4);
+      border-color: rgba(248, 113, 113, 0.6);
+    }
+
+    @keyframes safeGradient {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    @keyframes warningGradient {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    @keyframes dangerGradient {
+      0%, 100% { background-position: 0% 50%; opacity: 1; }
+      50% { background-position: 100% 50%; opacity: 0.8; }
+    }
+
+    /* 标题和图标增强 */
+    .recommendation-card h2 {
+      margin-bottom: 28px;
+      font-size: clamp(20px, 4vw, 28px); /* 从 clamp(22px, 4.5vw, 32px) 减小 */
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      gap: 10px; /* 从 18px 大幅减小 */
+      text-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+      position: relative;
+      z-index: 3;
+      line-height: 1.3; /* 增加行高控制 */
+      flex-wrap: nowrap; /* 防止换行 */
+      min-height: 40px; /* 确保足够高度 */
+    }
+
+    .recommendation-icon {
+      font-size: clamp(20px, 3.5vw, 26px); /* 从 clamp(28px, 6vw, 40px) 大幅减小 */
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      filter: drop-shadow(0 0 10px rgba(138, 43, 226, 0.6));
+      animation: iconFloat 3s ease-in-out infinite;
+      flex-shrink: 0; /* 防止图标被压缩 */
+      width: clamp(20px, 3.5vw, 26px); /* 固定宽度 */
+      height: clamp(20px, 3.5vw, 26px); /* 固定高度 */
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    @keyframes iconFloat {
+      0%, 100% { 
+        transform: translateY(0px) rotate(0deg) scale(1); 
+        filter: drop-shadow(0 0 10px rgba(138, 43, 226, 0.6));
+      }
+      25% { 
+        transform: translateY(-2px) rotate(-1deg) scale(1.02); /* 从 -4px -3deg 1.05 减小 */
+        filter: drop-shadow(0 0 12px rgba(255, 20, 147, 0.8));
+      }
+      50% { 
+        transform: translateY(-3px) rotate(0deg) scale(1.04); /* 从 -6px 1.1 减小 */
+        filter: drop-shadow(0 0 15px rgba(79, 172, 254, 0.8));
+      }
+      75% { 
+        transform: translateY(-2px) rotate(1deg) scale(1.02); /* 从 -4px 3deg 1.05 减小 */
+        filter: drop-shadow(0 0 12px rgba(255, 20, 147, 0.8));
+      }
+    }
+
+    .recommendation-card:hover .recommendation-icon {
+      transform: scale(1.1) rotate(8deg); /* 从 scale(1.2) rotate(15deg) 减小 */
+      filter: drop-shadow(0 0 20px rgba(138, 43, 226, 1)) 
+              drop-shadow(0 0 25px rgba(255, 20, 147, 0.8)); /* 从 30px 40px 减小 */
+    }
+
+    /* 内容区域增强 */
+    .recommendation-display {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(24px, 4vw, 32px);
+      position: relative;
+      z-index: 3;
+    }
+
+    /* 优先级显示增强 */
+    .recommendation-priority {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 14px 24px;
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.15), 
+        rgba(255, 255, 255, 0.08));
+      border-radius: 20px;
+      backdrop-filter: blur(15px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .recommendation-priority::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.3), 
+        transparent);
+      transition: left 0.6s ease;
+    }
+
+    .recommendation-priority:hover::before {
+      left: 100%;
+    }
+
+    .priority-label {
+      font-size: clamp(14px, 3vw, 16px);
+      color: rgba(255, 255, 255, 0.8);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .priority-value {
+      font-size: clamp(18px, 4vw, 24px);
+      font-weight: 800;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+      background: linear-gradient(45deg, #ffffff, #e3f2fd);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: priorityPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes priorityPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.9; transform: scale(1.05); }
+    }
+
+    /* 主要内容增强 */
+    .recommendation-content {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.1), 
+        rgba(255, 255, 255, 0.05));
+      border-radius: 20px;
+      padding: clamp(24px, 4vw, 32px);
+      backdrop-filter: blur(15px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .recommendation-content::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, 
+        rgba(138, 43, 226, 0.8), 
+        rgba(255, 20, 147, 0.8), 
+        rgba(79, 172, 254, 0.8));
+      background-size: 200% 100%;
+      animation: contentGradient 3s ease-in-out infinite;
+    }
+
+    @keyframes contentGradient {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .recommendation-main {
+      font-size: clamp(16px, 3.5vw, 20px);
+      font-weight: 600;
+      color: #ffffff;
+      line-height: 1.6;
+      margin-bottom: clamp(20px, 3vw, 28px);
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      animation: textGlow 4s ease-in-out infinite;
+    }
+
+    @keyframes textGlow {
+      0%, 100% { text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
+      50% { text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 20px rgba(255, 255, 255, 0.3); }
+    }
+
+    /* 详细信息增强 */
+    .recommendation-details {
+      display: flex;
+      flex-direction: column;
+      gap: clamp(16px, 3vw, 20px);
+      margin: clamp(20px, 3vw, 28px) 0;
+    }
+
+    .detail-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.12), 
+        rgba(255, 255, 255, 0.06));
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .detail-item::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.2), 
+        transparent);
+      transition: left 0.5s ease;
+    }
+
+    .detail-item:hover::before {
+      left: 100%;
+    }
+
+    .detail-item:hover {
+      background: linear-gradient(135deg, 
+        rgba(255, 255, 255, 0.18), 
+        rgba(255, 255, 255, 0.1));
+      transform: translateX(8px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    .detail-icon {
+      font-size: clamp(16px, 3vw, 22px); /* 从 clamp(20px, 4vw, 28px) 减小 */
+      flex-shrink: 0;
+      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.3)); /* 从 8px 减小 */
+      animation: detailIconPulse 3s ease-in-out infinite;
+    }
+
+    @keyframes detailIconPulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.08); opacity: 0.9; } /* 从 scale(1.1) 减小 */
+    }
+
+    .detail-text {
+      font-size: clamp(14px, 3vw, 16px);
+      color: rgba(255, 255, 255, 0.9);
+      line-height: 1.5;
+      font-weight: 500;
+      flex: 1; /* 确保文字占用剩余空间 */
+    }
+
+    /* 操作按钮增强 */
+    .recommendation-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: clamp(12px, 3vw, 16px);
+      margin-top: clamp(20px, 3vw, 28px);
+    }
+
+    .action-button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, 
+        rgba(79, 172, 254, 0.3), 
+        rgba(138, 43, 226, 0.2));
+      border: 1px solid rgba(79, 172, 254, 0.4);
+      border-radius: 15px;
+      color: #ffffff;
+      font-size: clamp(13px, 3vw, 15px);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+      flex: 1;
+      min-width: 120px;
+      justify-content: center;
+    }
+
+    .action-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, 
+        transparent, 
+        rgba(255, 255, 255, 0.3), 
+        transparent);
+      transition: left 0.6s ease;
+    }
+
+    .action-button:hover::before {
+      left: 100%;
+    }
+
+    .action-button:hover {
+      background: linear-gradient(135deg, 
+        rgba(79, 172, 254, 0.5), 
+        rgba(138, 43, 226, 0.4));
+      transform: translateY(-3px) scale(1.05);
+      box-shadow: 
+        0 15px 35px rgba(79, 172, 254, 0.4),
+        0 0 30px rgba(138, 43, 226, 0.3);
+      border-color: rgba(79, 172, 254, 0.6);
+    }
+
+    .action-button:active {
+      transform: translateY(-1px) scale(1.02);
+    }
+
+    .action-icon {
+      font-size: clamp(14px, 3vw, 18px); /* 从 clamp(16px, 3.5vw, 20px) 减小 */
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+      transition: transform 0.3s ease;
+    }
+
+    .action-button:hover .action-icon {
+      transform: scale(1.15) rotate(8deg); /* 从 scale(1.2) rotate(10deg) 减小 */
+    }
+
+    .action-text {
+      font-weight: 600;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    /* 响应式设计优化 */
+    @media (max-width: 1024px) {
+
+      .weather-title {
+        font-size: 1.2rem;
+        gap: 8px;
+      }
+
+      .weather-title .weather-icon {
+        font-size: 1.2rem;
+        width: 1.2rem;
+        height: 1.2rem;
+      }
+
+      .weather-content {
+        grid-template-columns: 1fr;
+        gap: 25px;
+      }
+      
+      .location-input {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .recommendation-card {
+        padding: 24px;
+      }
+
+      .recommendation-card h2 {
+        font-size: clamp(18px, 3.5vw, 24px);
+        gap: 8px;
+      }
+
+      .recommendation-actions {
+        flex-direction: column;
+      }
+
+      .recommendation-icon {
+        font-size: clamp(18px, 3vw, 22px);
+        width: clamp(18px, 3vw, 22px);
+        height: clamp(18px, 3vw, 22px);
+      }
+
+      .action-button {
+        min-width: auto;
+      }
+    }
+
+    @media (max-width: 768px) {
+
+      .weather-title {
+        font-size: 1.1rem;
+        gap: 6px;
+      }
+
+      .weather-title .weather-icon {
+        font-size: 1.1rem;
+        width: 1.1rem;
+        height: 1.1rem;
+      }
+
+      .time-icon {
+        font-size: clamp(18px, 3vw, 24px);
+      }
+   
+      .weather-card {
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      
+      /* 天气卡片头部布局优化 */
+      .weather-header {
+        flex-direction: column;
+        gap: 12px; /* 从 15px 减小 */
+        text-align: center;
+        align-items: center;
+      }
+      
+      .weather-title {
+        font-size: 1.4rem;
+      }
+      
+      .weather-content {
+        grid-template-columns: 1fr;
+        gap: 20px;
+      }
+      
+      .weather-details {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      
+      .temperature {
+        font-size: 2.8rem;
+      }
+      
+      .weather-main-icon {
+        font-size: 3rem;
+      }
+      
+      .city-shortcuts {
+        justify-content: center;
+      }
+      
+      .location-settings {
+        padding: 16px;
+      }
+      
+      .statistics-panel {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+      }
+      
+      .stat-card {
+        padding: 20px 16px;
+      }
+      
+      .stat-value {
+        font-size: 1.6rem;
+      }
+      
+      .stat-icon {
+        font-size: 1.8rem;
+      }
+
+      .recommendation-card {
+        padding: 20px;
+        border-radius: 20px;
+      }
+
+      .recommendation-card h2 {
+        font-size: clamp(16px, 3vw, 20px);
+        gap: 6px;
+        justify-content: center; /* 居中对齐 */
+      }
+
+      .recommendation-content {
+        padding: 20px;
+      }
+
+      .recommendation-icon {
+        font-size: clamp(16px, 2.5vw, 18px);
+        width: clamp(16px, 2.5vw, 18px);
+        height: clamp(16px, 2.5vw, 18px);
+      }
+
+      .detail-item {
+        padding: 12px 16px;
+        gap: 12px;
+      }
+
+      .data-card h2,
+      .history-data-card h2 {
+        font-size: clamp(16px, 3vw, 22px);
+        gap: 8px;
+      }
+      
+      .time-icon,
+      .safety-icon {
+        font-size: clamp(16px, 2.5vw, 20px);
+        width: clamp(16px, 2.5vw, 20px);
+        height: clamp(16px, 2.5vw, 20px);
+      }
+
+    }
+
+    @media (max-width: 480px) {
+
+      .weather-title {
+        font-size: 1rem;
+        gap: 5px;
+      }
+
+      .weather-title .weather-icon {
+        font-size: 1rem;
+        width: 1rem;
+        height: 1rem;
+      }
+
+      .weather-card {
+        padding: 16px;
+        border-radius: 16px;
+      }
+      
+      .weather-main-icon {
+        font-size: 2.5rem;
+      }
+      
+      .temperature {
+        font-size: 2.5rem;
+      }
+      
+      .city-shortcuts {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      
+      .city-shortcut {
+        font-size: 0.8rem;
+        padding: 6px 12px;
+      }
+      
+      .time-slots {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .recommendation-card h2 {
+        font-size: clamp(14px, 2.5vw, 18px);
+        gap: 5px;
+      }
+
+      .recommendation-card {
+        padding: 16px;
+        border-radius: 16px;
+      }
+
+      .recommendation-icon {
+        font-size: clamp(14px, 2vw, 16px);
+        width: clamp(14px, 2vw, 16px);
+        height: clamp(14px, 2vw, 16px);
+      }
+
+      .recommendation-actions {
+        gap: 8px;
+      }
+
+      .action-button {
+        padding: 10px 16px;
+        font-size: 12px;
+      }
+
+      .data-card h2,
+      .history-data-card h2 {
+        font-size: clamp(14px, 2.5vw, 18px);
+        gap: 6px;
+      }
+      
+      .time-icon,
+      .safety-icon {
+        font-size: clamp(14px, 2vw, 16px);
+        width: clamp(14px, 2vw, 16px);
+        height: clamp(14px, 2vw, 16px);
+      }
+
+
+    }
+/* ----- 自定义弹窗样式（与 page1.html 保持一致） ----- */
+      .modal-overlay {
+        position: fixed; inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        display: none; align-items: center; justify-content: center;
+        z-index: 50;
+      }
+      .modal-overlay.active {
+        display: flex;
+      }
+      .modal {
+        position: relative;
+        width: 400px; max-width: 90%;
+        padding: 32px 24px;
+        background: rgba(20,20,40,0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.2);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.5);
+        text-align: center; color: #fff;
+      }
+      .modal h3 {
+        margin: 0 0 16px; font-size: 20px; font-weight: 600;
+        text-shadow: 0 0 6px rgba(0,0,0,0.5);
+      }
+      .modal p {
+        margin: 0 0 24px; font-size: 16px; line-height: 1.4;
+      }
+      .modal-buttons {
+        display: flex; justify-content: center; gap: 16px;
+      }
+      .modal-btn {
+        min-width: 100px; padding: 10px 0; font-size: 14px;
+        font-weight: 500; border-radius: 8px; cursor: pointer;
+        transition: transform .2s, box-shadow .2s;
+      }
+      .modal-btn.primary {
+        background: linear-gradient(135deg, #ff6ec4, #7873f5);
+        border: none; box-shadow: 0 4px 12px rgba(120,115,245,0.6); color: #fff;
+      }
+      .modal-btn.primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 16px rgba(120,115,245,0.8);
+      }
+      .modal-btn.secondary {
+        background: transparent; border: 2px solid rgba(255,255,255,0.6);
+        color: #fff;
+      }
+      .modal-btn.secondary:hover {
+        background: rgba(255,255,255,0.1);
+        transform: translateY(-2px);
+      }
+  </style>
+</head>
+<body>
+ 
+  <div class="page-container">
+    <button id="toStaticBtn" class="toggle-btn">点击进入休息模式<span class ="rest-icon">🍵</span></button>
+      <div class="battery-status" id="batteryStatus">
+    <div class="battery-container">
+      <div class="battery-icon">
+        <div class="battery-level" id="batteryLevelBar"></div>
+      </div>
+      <div class="battery-text" id="batteryText">--%</div>
+    </div>
+  </div>
+     
+    <h1>欢迎回来,allforkarina!</h1>
+
+    <!-- 优化后的时间显示卡片 -->
+    <div class="data-card time-card">
+      <h2>
+        <span class="time-icon" id="timeIcon">🕐</span>
+        当前时间
+      </h2>
+      
+      <div class="time-display">
+        <div class="date-section">
+          <div class="current-date" id="current-date">2025-07-19</div>
+          <div class="current-weekday" id="current-weekday">星期六</div>
+        </div>
+        
+        <div class="time-section">
+          <div class="digital-clock" id="digital-clock">
+            <span class="time-hours" id="time-hours">12</span>
+            <span class="time-separator">:</span>
+            <span class="time-minutes" id="time-minutes">44</span>
+            <span class="time-separator">:</span>
+            <span class="time-seconds" id="time-seconds">06</span>
+          </div>
+          <div class="time-zone" id="time-zone">UTC+8 北京时间</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改后的天气影响分析卡片 - 使用高德天气API -->
+    <div class="weather-card" id="weatherCard">
+      <div class="weather-header">
+        <h2 class="weather-title">
+          <span class="weather-icon" id="weatherTitleIcon">🌤️</span>
+          天气影响分析
+        </h2>
+        <button class="weather-refresh-btn" id="weatherRefreshBtn">
+          <span class="refresh-icon">🔄</span>
+          更新天气
+        </button>
+      </div>
+      
+      <!-- 高德天气城市设置 -->
+      <div class="location-settings">
+        <div class="location-input">
+          <input type="text" id="cityInput" placeholder="输入城市名称 (如: 贵阳市, 北京市, 上海市)" value="贵阳市">
+          <button class="location-btn" id="setCityBtn">设置城市</button>
+          <button class="location-btn" id="getCurrentLocationBtn">📍 IP定位</button>
+        </div>
+        
+        <!-- 热门城市快捷选择 -->
+        <div class="city-shortcuts">
+          <span class="city-shortcut" data-city="贵阳市">贵阳</span>
+          <span class="city-shortcut" data-city="北京市">北京</span>
+          <span class="city-shortcut" data-city="上海市">上海</span>
+          <span class="city-shortcut" data-city="广州市">广州</span>
+          <span class="city-shortcut" data-city="深圳市">深圳</span>
+          <span class="city-shortcut" data-city="杭州市">杭州</span>
+          <span class="city-shortcut" data-city="南京市">南京</span>
+          <span class="city-shortcut" data-city="武汉市">武汉</span>
+        </div>
+        
+        <div class="weather-status offline" id="weatherStatus">
+          <div class="status-dot"></div>
+          <span id="statusText">准备获取天气数据...</span>
+        </div>
+        
+        <div class="api-info">
+          数据来源：高德地图天气API
+        </div>
+      </div>
+      
+      <div class="weather-content">
+        <div class="current-weather">
+          <div class="weather-main-icon" id="weatherMainIcon">🌤️</div>
+          <div class="temperature" id="temperature">
+            <span id="tempValue">--</span>°C
+          </div>
+          <div class="weather-description" id="weatherDescription">加载中...</div>
+          
+          <div class="weather-details">
+            <div class="weather-detail-item">
+              <span class="detail-icon">💧</span>
+              <div class="detail-label">湿度</div>
+              <div class="detail-value" id="humidity">--%</div>
+            </div>
+            <div class="weather-detail-item">
+              <span class="detail-icon">💨</span>
+              <div class="detail-label">风力</div>
+              <div class="detail-value" id="windSpeed">-- 级</div>
+            </div>
+            <div class="weather-detail-item">
+              <span class="detail-icon">🌪️</span>
+              <div class="detail-label">风向</div>
+              <div class="detail-value" id="windDirection">--</div>
+            </div>
+            <div class="weather-detail-item">
+              <span class="detail-icon">📊</span>
+              <div class="detail-label">气压</div>
+              <div class="detail-value" id="pressure">-- hPa</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="riding-analysis">
+          <div class="safety-assessment safe" id="safetyAssessment">
+            <div class="assessment-header">
+              <span class="assessment-icon" id="assessmentIcon">✅</span>
+              <span class="assessment-level" id="assessmentLevel">加载中...</span>
+            </div>
+
+            <div class="assessment-description" id="assessmentDescription">
+                      正在获取天气数据，请稍候...
+            </div>
+            
+            <div class="weather-warning" id="weatherWarning" style="display: none;">
+              <div class="warning-header">
+                <span>⚠️</span>
+                <strong>天气警告</strong>
+              </div>
+              <div class="warning-text" id="warningText">
+                检测到恶劣天气条件，请谨慎骑行。
+              </div>
+            </div>
+          </div>
+          
+          <div class="riding-recommendations">
+            <div class="recommendations-header">
+              <span>💡</span>
+              骑行建议
+            </div>
+            <ul class="recommendation-list" id="recommendationList">
+              <li class="recommendation-item">
+                <span class="recommendation-icon">⏳</span>
+                <span>正在获取天气信息...</span>
+              </li>
+            </ul>
+          </div>
+          
+          <div class="best-time-section">
+            <div class="best-time-header">
+              <span>⏰</span>
+              建议骑行时间
+            </div>
+            <div class="time-slots" id="timeSlots">
+              <div class="time-slot">
+                <div class="slot-time">加载中</div>
+                <div class="slot-condition">...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新增：数据统计面板 -->
+    <div class="data-card">
+      <div class="statistics-header">
+        <h2 class="statistics-title">
+          <span class="title-icon">📊</span>
+          骑行数据统计
+        </h2>
+        <button class="refresh-btn" id="refreshStatsBtn">
+          <span class="refresh-icon">🔄</span>
+          刷新数据
+        </button>
+      </div>
+      
+  <div class="statistics-panel">
+        <div class="stat-card" id="distanceCard">
+          <span class="stat-icon">📍</span>
+          <div class="stat-label">当前距离</div>
+          <div class="stat-value" id="distance-value">
+            --<span class="stat-unit">m</span>
+          </div>
+        </div>
+
+        <div class="stat-card" id="targetCard">
+          <span class="stat-icon">🎯</span>
+          <div class="stat-label">目标数量</div>
+          <div class="stat-value" id="target-value">
+            --<span class="stat-unit">个</span>
+          </div>
+        </div>
+
+        <div class="stat-card danger" id="dangerCard">
+          <span class="stat-icon">🚨</span>
+          <div class="stat-label">危险事件次数</div>
+          <div class="stat-value" id="dangerCount">
+            --<span class="stat-unit">次</span>
+          </div>
+          <div class="stat-trend neutral" id="dangerTrend">暂无数据</div>
+        </div>
+
+        <div class="stat-card" id="avgDistanceCard">
+          <span class="stat-icon">📏</span>
+          <div class="stat-label">平均安全距离</div>
+          <div class="stat-value" id="avgDistance">
+            --<span class="stat-unit">米</span>
+          </div>
+          <div class="stat-trend neutral" id="distanceTrend">暂无数据</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新增：电池状态图表 -->
+    <div class="data-card">
+      <h2 class="statistics-title">
+        <span class="title-icon">🔋</span>
+        电池状态图表
+      </h2>
+      <div class="chart-card">
+        <h3 class="chart-title">电池电压/电流变化</h3>
+        <div class="chart-canvas">
+          <canvas id="batteryChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="history-data-card">
+      <h2>历史数据</h2>
+
+      <!-- 下拉栏 -->
+      <div class="selector-container">
+        <label for="dateSelector"><strong>选择日期：</strong></label>
+        <select id="dateSelector"></select>
+      </div>
+
+      <!-- 动态数据显示区域 -->
+      <div id="historyData" class="history-content">
+        <div class="data-row">
+          <div class="data-item">
+            <strong>后方车辆：</strong>
+            <span id="numTarget">--</span>
+          </div>
+          <div class="data-item">
+            <strong>最近距离 (Distance)：</strong>
+            <span id="Distance">--</span> m
+          </div>
+        </div>
+        
+        <div class="map-container">
+          <p><strong>位置路径地图：</strong></p>
+          <div id="map"></div>
+        </div>
+      </div>
+
+      <div class="logout-container">
+        <button id="logoutBtn">退出登录</button>
+        <button id="clearLocalBtn">清除本地数据</button>
+      </div>
+    </div>
+
+    <!-- 优化后的安全系数卡片 -->
+    <div class="data-card safety-card">
+      <h2>
+        <span class="safety-icon" id="safetyIcon">🛡️</span>
+        骑行安全系数
+      </h2>
+      
+      <div class="safety-display">
+        <div class="safety-level-container">
+          <div class="safety-level-text">
+            <span id="safety-level">当前状态：安全</span>
+            <span class="safety-percentage" id="safetyPercentage">100%</span>
+          </div>
+          
+          <div class="safety-progress-container">
+            <div class="safety-progress-bar" id="safetyProgressBar">
+              <div class="safety-progress-fill" id="safetyProgressFill"></div>
+              <div class="safety-progress-glow" id="safetyProgressGlow"></div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="safety-metrics">
+          <div class="metric-item">
+            <span class="metric-label">后方距离</span>
+            <span class="metric-value" id="safetyDistance">-- m</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">车辆数量</span>
+            <span class="metric-value" id="safetyTargetCount">--</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label">威胁等级</span>
+            <span class="metric-value" id="threatLevel">未知</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 新增：独立的安全建议卡片 - 优化增强版 -->
+    <div class="data-card recommendation-card" id="recommendationCard">
+      <h2>
+        <span class="recommendation-icon" id="recommendationIcon">🚴</span>
+        骑行安全建议
+      </h2>
+      
+      <div class="recommendation-display">
+        <div class="recommendation-priority" id="recommendationPriority">
+          <span class="priority-label">优先级：</span>
+          <span class="priority-value" id="priorityValue">正常</span>
+        </div>
+        
+        <div class="recommendation-content">
+          <div class="recommendation-main" id="recommendationMain">
+            正在分析后方车辆情况...
+          </div>
+          
+          <div class="recommendation-details" id="recommendationDetails">
+            <div class="detail-item">
+              <span class="detail-icon">📊</span>
+              <span class="detail-text" id="analysisDetail">等待车辆数据分析</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-icon">⚠️</span>
+              <span class="detail-text" id="riskDetail">骑行风险评估中</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-icon">🎯</span>
+              <span class="detail-text" id="actionDetail">骑行建议待定</span>
+            </div>
+          </div>
+          
+          <div class="recommendation-actions" id="recommendationActions">
+            <div class="action-button" id="actionButton1">
+              <span class="action-icon">🔄</span>
+              <span class="action-text">刷新数据</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+<!-- 自定义弹窗 -->
+<div id="modalOverlay" class="modal-overlay">
+  <div class="modal">
+    <h3>提示</h3>
+    <p id="modalMsg">这里是提示内容</p>
+    <div class="modal-buttons">
+      <button id="modalCancel" class="modal-btn secondary">取消</button>
+      <button id="modalOk"       class="modal-btn primary">确定</button>
+    </div>
+  </div>
+</div>
+
+  <!-- 引入 MQTT.js 和 Leaflet.js -->
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // ========================================
+    // 全局配置和变量声明
+    // ========================================
+    
+    // 高德天气API配置
+    const AMAP_API_KEY = '282762afa4b8bae6c3a5915c898115aa'; // 请替换为您的实际API Key
+    const AMAP_WEATHER_API = 'https://restapi.amap.com/v3/weather/weatherInfo';
+    const AMAP_GEOCODING_API = 'https://restapi.amap.com/v3/geocode/geo';
+    const AMAP_IP_LOCATION_API = 'https://restapi.amap.com/v3/ip';
+    
+    // 贵阳市地理边界配置
+    const GUIYANG_BOUNDS = {
+      north: 27.209, south: 25.652, east: 107.394, west: 105.612
+    };
+    const GUIYANG_CITY_BOUNDS = {
+      north: 26.851, south: 26.435, east: 106.945, west: 106.522
+    };
+
+    // MQTT配置
+    const mqttOptions = {
+      clean: true,
+      connectTimeout: 4000,
+      reconnectPeriod: 4000
+    };
+
+    // 全局数据变量
+    let mockData = {};
+    let weatherData = null;
+    let weatherUpdateInterval = null;
+    let currentCity = '贵阳市';
+    let currentAdcode = null;
+    let batteryChart = null;
+    let batteryHistory = { voltage: [], current: [], timestamps: [] };
+    let randomVoltage = 7.56;
+    let batterylevel = 22;
+
+    // 地图相关变量
+    let map = null;
+    let currentPolyline = null;
+    let currentMarkers = [];
+    let locationContainer = {};
+
+    // MQTT客户端
+    let client = null;
+
+    // ========================================
+    // 数据存储和管理函数
+    // ========================================
+
+    // 从本地数据中加载存储配置
+    function loadLocalStorageConfig() {
+      try {
+          const configData = localStorage.getItem('storageConfig');
+          if (configData) {
+              const config = JSON.parse(configData);
+              console.log('从控制台同步存储配置:', config);
+              window.maxBatteryDataPoints = config.maxBatteryDataPoints || 30;
+              window.maxLocationDataPoints = config.maxLocationDataPoints || 30;
+              window.maxHistoryDays = config.maxHistoryDays || 30;
+              return {
+                  maxBatteryDataPoints: config.maxBatteryDataPoints || 30,
+                  maxLocationDataPoints: config.maxLocationDataPoints || 30,
+                  maxHistoryDays: config.maxHistoryDays || 30,
+                  lastUpdated: config.lastUpdated
+              };
+          } else {
+              console.log('⚠️ 未找到存储配置，使用默认值');
+              return getDefaultStorageConfig();
+          }
+      } catch (error) {
+          console.error('❌ 读取存储配置失败:', error);
+          return getDefaultStorageConfig();
+      }
+    }
+
+    // 默认配置
+    function getDefaultStorageConfig() {
+      return {
+          maxBatteryDataPoints: 30,
+          maxLocationDataPoints: 30,
+          maxHistoryDays: 30,
+          lastUpdated: new Date().toISOString()
+      };
+    }
+
+    // 从localStorage加载本地存储数据
+    function loadLocalStorageData() {
+      // 加载电池历史数据
+      loadBatteryHistory();
+      
+      // 加载路径数据
+      const stored = localStorage.getItem("mockData");
+      if (stored) {
+        try {
+          mockData = JSON.parse(stored);
+        } catch (e) {
+          console.warn("🧹 本地数据解析失败，将清空缓存");
+          localStorage.removeItem("mockData");
+          mockData = {};
+        }
+      }
+    }
+
+    // 从localStorage加载电池历史数据
+    function loadBatteryHistory() {
+      try {
+        const stored = localStorage.getItem('batteryHistoryData');
+        if (stored) {
+          const data = JSON.parse(stored);
+          batteryHistory = {
+            voltage: data.voltage || [],
+            current: data.current || [],
+            timestamps: data.timestamps || []
+          };
+          console.log('📊 电池历史数据已加载:', batteryHistory.voltage.length + '个数据点');
+        }
+      } catch (e) {
+        console.warn('⚠️ 电池历史数据加载失败:', e);
+        batteryHistory = { voltage: [], current: [], timestamps: [] };
+      }
+    }
+
+    // 保存电池历史数据到localStorage
+    function saveBatteryHistory() {
+      try {
+        localStorage.setItem('batteryHistoryData', JSON.stringify(batteryHistory));
+      } catch (e) {
+        console.warn('⚠️ 电池历史数据保存失败:', e);
+      }
+    }
+
+    function initStorageConfigListener() {
+      // 监听storage事件（跨标签页通信）
+      window.addEventListener('storage', function(e) {
+          if (e.key === 'storageConfig' && e.newValue) {
+              try {
+                  const newConfig = JSON.parse(e.newValue);
+                  console.log('🔄 检测到存储配置更新:', newConfig);
+                  
+                  // 更新全局配置
+                  window.maxBatteryDataPoints = newConfig.maxBatteryDataPoints || 30;
+                  window.maxLocationDataPoints = newConfig.maxLocationDataPoints || 30;
+                  window.maxHistoryDays = newConfig.maxHistoryDays || 30;
+                  
+                  // 立即应用新的存储限制
+                  applyStorageLimits();
+                  
+                  console.log('✅ 存储配置已同步更新');
+              } catch (error) {
+                  console.error('❌ 解析存储配置失败:', error);
+              }
+          }
+        });
+
+      console.log('👂 存储配置监听器已启动');
+    }
+
+    function applyStorageLimits() {
+        try {
+            // 1. 清理电池历史数据
+            cleanupBatteryData();
+
+            // 2. 清理路径位置数据
+            cleanupLocationData();
+            
+            // 3. 清理历史天数数据
+            cleanupHistoryDays();
+            
+            console.log(`📊 存储限制已应用:
+                - 电池数据点: ${window.maxBatteryDataPoints}
+                - 位置数据点: ${window.maxLocationDataPoints}  
+                - 历史天数: ${window.maxDays}`);
+                
+        } catch (error) {
+            console.error('❌ 应用存储限制失败:', error);
+        }
+    }
+
+    function cleanupBatteryData() {
+        try {
+            // 清理电池历史数据
+            const batteryData = localStorage.getItem('batteryHistoryData');
+            if (batteryData) {
+                let parsedData = JSON.parse(batteryData);
+                
+                // 检查数据结构是否正确
+                if (parsedData && parsedData.voltage && parsedData.current && parsedData.timestamps &&
+                    Array.isArray(parsedData.voltage) && Array.isArray(parsedData.current) && Array.isArray(parsedData.timestamps)) {
+                    
+                    const voltageLength = parsedData.voltage.length;
+                    const currentLength = parsedData.current.length;
+                    const timestampsLength = parsedData.timestamps.length;
+                    
+                    // 获取最大长度作为数据点数量
+                    const dataPointCount = Math.max(voltageLength, currentLength, timestampsLength);
+                    
+                    console.log(`📊 电池数据检查: voltage(${voltageLength}), current(${currentLength}), timestamps(${timestampsLength})`);
+                    
+                    if (dataPointCount > adminSettings.storageLimit) {
+                        // 保留最新的数据 - 对每个数组分别处理
+                        const keepCount = adminSettings.storageLimit;
+                        
+                        parsedData.voltage = parsedData.voltage.slice(-keepCount);
+                        parsedData.current = parsedData.current.slice(-keepCount);
+                        parsedData.timestamps = parsedData.timestamps.slice(-keepCount);
+                        
+                        localStorage.setItem('batteryHistoryData', JSON.stringify(parsedData));
+                        console.log(`🔋 电池数据清理完成，保留最新 ${keepCount} 条，删除了 ${dataPointCount - keepCount} 条`);
+                    } else {
+                        console.log(`✅ 电池数据检查完成，当前 ${dataPointCount} 条数据在限制范围内`);
+                    }
+                    
+                } else {
+                    console.warn('⚠️ 电池数据格式不正确，跳过清理');
+                }
+            } else {
+                console.log('📊 未找到电池历史数据');
+            }
+        } catch (error) {
+            console.error('❌ 清理电池数据失败:', error);
+        }
+    }
+
+    function cleanupLocationData() {
+        try {
+            const storedData = localStorage.getItem('mockData');
+            if (storedData) {
+                const data = JSON.parse(storedData);
+                let totalCleaned = 0;
+                
+                // 遍历每天的数据
+                Object.keys(data).forEach(date => {
+                    if (data[date].path && Array.isArray(data[date].path)) {
+                        const originalLength = data[date].path.length;
+                        
+                        if (originalLength > window.maxLocationDataPoints) {
+                            // 保留最新的位置点
+                            data[date].path = data[date].path.slice(-window.maxLocationDataPoints);
+                            totalCleaned += originalLength - window.maxLocationDataPoints;
+                            
+                            console.log(`📍 ${date} 位置数据: ${originalLength} → ${data[date].path.length}`);
+                        }
+                    }
+                });
+                
+                if (totalCleaned > 0) {
+                    // 更新localStorage
+                    localStorage.setItem('mockData', JSON.stringify(data));
+                    
+                    // 更新内存中的数据
+                    mockData = data;
+                    
+                    console.log(`🗺️ 位置数据清理完成，总共删除 ${totalCleaned} 个位置点`);
+                    
+                    // 如果当前显示的日期有数据更新，刷新地图
+                    const currentDate = document.getElementById('dateSelector').value;
+                    if (currentDate && data[currentDate]) {
+                        updateMapDisplay(currentDate);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ 清理位置数据失败:', error);
+        }
+    }
+
+    function cleanupHistoryDays() {
+        try {
+            const storedData = localStorage.getItem('mockData');
+            if (storedData) {
+                const data = JSON.parse(storedData);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - window.maxDays);
+                
+                let deletedDays = 0;
+                const datesToDelete = [];
+                
+                // 找出需要删除的日期
+                Object.keys(data).forEach(date => {
+                    const dateObj = new Date(date);
+                    if (dateObj < cutoffDate) {
+                        datesToDelete.push(date);
+                    }
+                });
+                
+                // 删除过期数据
+                datesToDelete.forEach(date => {
+                    delete data[date];
+                    deletedDays++;
+                });
+                
+                if (deletedDays > 0) {
+                    // 更新localStorage
+                    localStorage.setItem('mockData', JSON.stringify(data));
+                    
+                    // 更新内存中的数据
+                    mockData = data;
+                    
+                    // 重新生成日期选项
+                    const dateSelector = document.getElementById('dateSelector');
+                    const currentValue = dateSelector.value;
+                    
+                    // 清空并重新生成选项
+                    dateSelector.innerHTML = '';
+                    generateDateOptions("2025-06-04");
+                    
+                    // 尝试恢复之前选择的日期，如果不存在则选择今天
+                    const today = new Date().toISOString().split("T")[0];
+                    if (data[currentValue]) {
+                        dateSelector.value = currentValue;
+                    } else {
+                        dateSelector.value = today;
+                    }
+                    dateSelector.dispatchEvent(new Event("change"));
+                    
+                    console.log(`📅 历史数据清理完成，删除 ${deletedDays} 天的数据，保留最近 ${window.maxDays} 天`);
+                }
+            }
+        } catch (error) {
+            console.error('❌ 清理历史数据失败:', error);
+        }
+    }
+
+    function updateMapDisplay(dateStr) {
+        const data = mockData[dateStr];
+        if (data && data.path) {
+            // 清除现有标记
+            if (currentPolyline) map.removeLayer(currentPolyline);
+            currentMarkers.forEach(marker => map.removeLayer(marker));
+            currentMarkers = [];
+            
+            // 添加新的路径和标记
+            if (data.path.length > 0) {
+                currentPolyline = L.polyline(data.path, { color: 'blue' }).addTo(map);
+                data.path.forEach(coord => {
+                    const marker = L.marker(coord).addTo(map);
+                    currentMarkers.push(marker);
+                });
+                map.fitBounds(currentPolyline.getBounds());
+            }
+        }
+    }
+
+
+
+    // ========================================
+    // 地理位置验证函数
+    // ========================================
+
+    /**
+     * 检查坐标点是否在贵阳市范围内
+     */
+    function isLocationInGuiyang(lat, lng, strictMode = false) {
+      const bounds = strictMode ? GUIYANG_CITY_BOUNDS : GUIYANG_BOUNDS;
+      return lat >= bounds.south && lat <= bounds.north && lng >= bounds.west && lng <= bounds.east;
+    }
+
+    /**
+     * 校验并过滤location数组，只保留贵阳市范围内的坐标
+     */
+    function validateGuiyangLocations(locations) {
+      if (!Array.isArray(locations)) return [];
+      return locations.filter(location => {
+        if (!Array.isArray(location) || location.length < 2) return false;
+        const [lat, lng] = location;
+        const numLat = parseFloat(lat);
+        const numLng = parseFloat(lng);
+        if (isNaN(numLat) || isNaN(numLng)) return false;
+        return isLocationInGuiyang(numLat, numLng);
+      });
+    }
+
+    /**
+     * 获取上一次的有效location数据
+     */
+    function getLastValidPath(date) {
+      const data = mockData[date];
+      return (data && data.path && Array.isArray(data.path)) ? data.path : [];
+    }
+
+    // ========================================
+    // 天气API相关函数
+    // ========================================
+    // 获取城市编码 (adcode)
+    async function getCityAdcode(cityName) {
+      try {
+        const response = await fetch(
+          `${AMAP_GEOCODING_API}?key=${AMAP_API_KEY}&address=${encodeURIComponent(cityName)}&city=${encodeURIComponent(cityName)}`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.status !== '1' || !data.geocodes || data.geocodes.length === 0) {
+          throw new Error(data.info || '城市未找到');
+        }
+        
+        const geocode = data.geocodes[0];
+        return {
+          adcode: geocode.adcode,
+          city: geocode.city || geocode.district,
+          province: geocode.province,
+          location: geocode.location,
+          formatted_address: geocode.formatted_address
+        };
+      } catch (error) {
+        console.error('获取城市编码失败:', error);
+        throw error;
+      }
+    }
+
+    // 通过IP获取城市信息
+    async function getCityByIP() {
+      try {
+        const response = await fetch(
+          `${AMAP_IP_LOCATION_API}?key=${AMAP_API_KEY}&ip=`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.status !== '1') {
+          throw new Error(data.info || 'IP定位失败');
+        }
+        
+        return {
+          adcode: data.adcode,
+          city: data.city,
+          province: data.province
+        };
+      } catch (error) {
+        console.error('IP定位失败:', error);
+        throw error;
+      }
+    }
+
+    // 高德天气图标映射
+    function getWeatherIconFromAmap(weather) {
+      const weatherMap = {
+        '晴': '☀️',
+        '少云': '🌤️',
+        '晴间多云': '⛅',
+        '多云': '☁️',
+        '阴': '☁️',
+        '有风': '💨',
+        '平静': '😌',
+        '微风': '🍃',
+        '和风': '🍃',
+        '清风': '💨',
+        '强风/劲风': '💨',
+        '疾风': '🌪️',
+        '大风': '🌪️',
+        '烈风': '🌪️',
+        '风暴': '🌪️',
+        '狂爆风': '🌪️',
+        '飓风': '🌀',
+        '热带风暴': '🌀',
+        '霾': '😷',
+        '中度霾': '😷',
+        '重度霾': '😷',
+        '严重霾': '😷',
+        '雨': '🌧️',
+        '小雨': '🌦️',
+        '中雨': '🌧️',
+        '大雨': '🌧️',
+        '暴雨': '⛈️',
+        '大暴雨': '⛈️',
+        '特大暴雨': '⛈️',
+        '阵雨': '🌦️',
+        '雷阵雨': '⛈️',
+        '雷阵雨并伴有冰雹': '⛈️',
+        '冻雨': '🧊',
+        '雨夹雪': '🌨️',
+        '阵雪': '🌨️',
+        '小雪': '❄️',
+        '中雪': '❄️',
+        '大雪': '❄️',
+        '暴雪': '❄️',
+        '雾': '🌫️',
+        '浓雾': '🌫️',
+        '强浓雾': '🌫️'
+      };
+      
+      return weatherMap[weather] || '🌤️';
+    }
+
+    // 风力等级转换为速度 (大概值)
+    function windPowerToSpeed(windPower) {
+      const windSpeedMap = {
+        '0': 0,
+        '1': 2,
+        '2': 6,
+        '3': 12,
+        '4': 20,
+        '5': 31,
+        '6': 43,
+        '7': 56,
+        '8': 70,
+        '9': 85,
+        '10': 100,
+        '11': 120,
+        '12': 140
+      };
+      
+      const level = windPower.replace(/[^\d]/g, ''); // 提取数字
+      return windSpeedMap[level] || 0;
+    }
+
+    // 获取高德天气数据
+    async function fetchAmapWeatherData(adcode) {
+      try {
+        updateWeatherStatus('online', '正在获取天气数据...');
+        
+        // 获取实时天气
+        const response = await fetch(
+          `${AMAP_WEATHER_API}?key=${AMAP_API_KEY}&city=${adcode}&extensions=base`
+        );
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.status !== '1') {
+          if (data.infocode === '10001') {
+            throw new Error('API密钥无效，请检查您的高德地图API Key');
+          } else if (data.infocode === '10003') {
+            throw new Error('访问已超出日访问量');
+          } else {
+            throw new Error(data.info || 'API请求失败');
+          }
+        }
+        
+        if (!data.lives || data.lives.length === 0) {
+          throw new Error('未获取到天气数据');
+        }
+        
+        const liveWeather = data.lives[0];
+        
+        // 转换为内部格式
+        const now = new Date();
+        const isDay = now.getHours() >= 6 && now.getHours() < 20;
+        
+        weatherData = {
+          weather: [{
+            main: liveWeather.weather,
+            description: liveWeather.weather
+          }],
+          main: {
+            temp: parseFloat(liveWeather.temperature),
+            feels_like: parseFloat(liveWeather.temperature), // 高德API无体感温度，使用实际温度
+            humidity: parseFloat(liveWeather.humidity),
+            pressure: 1013 // 高德基础版API无气压，使用标准气压
+          },
+          wind: {
+            speed: windPowerToSpeed(liveWeather.windpower), // 转换风力等级为速度
+            direction: liveWeather.winddirection,
+            power: liveWeather.windpower
+          },
+          visibility: 10000, // 高德基础版API无能见度，使用默认值
+          dt: Math.floor(new Date(liveWeather.reporttime).getTime() / 1000),
+          name: liveWeather.city,
+          province: liveWeather.province,
+          adcode: liveWeather.adcode,
+          reporttime: liveWeather.reporttime,
+          isDay: isDay
+        };
+        
+        updateWeatherDisplay(weatherData);
+        
+        // 缓存天气数据
+        localStorage.setItem('amapWeatherData', JSON.stringify({
+          data: weatherData,
+          timestamp: Date.now(),
+          adcode: adcode
+        }));
+        
+        updateWeatherStatus('online', `天气数据已更新 - ${liveWeather.province} ${liveWeather.city}`);
+        console.log('🌤️ 高德天气数据已获取:', weatherData);
+        
+      } catch (error) {
+        console.error('❌ 获取高德天气数据失败:', error);
+        updateWeatherStatus('error', `获取失败: ${error.message}`);
+        
+        // 尝试使用缓存数据
+        const cached = localStorage.getItem('amapWeatherData');
+        if (cached) {
+          try {
+            const cachedData = JSON.parse(cached);
+            // 如果缓存数据不超过1小时，使用缓存
+            if (Date.now() - cachedData.timestamp < 3600000) {
+              weatherData = cachedData.data;
+              updateWeatherDisplay(weatherData);
+              updateWeatherStatus('offline', '使用缓存数据 (离线模式)');
+              console.log('🔄 使用缓存的高德天气数据');
+              return;
+            }
+          } catch (e) {
+            console.error('缓存数据解析失败:', e);
+          }
+        }
+        
+        // 如果没有缓存或缓存过期，显示错误信息
+        displayWeatherError(error.message);
+      }
+    }
+
+    // 评估骑行安全等级
+    function assessRidingSafety(weather) {
+      const temp = weather.main.temp;
+      const humidity = weather.main.humidity;
+      const windSpeed = weather.wind.speed; // 已转换的km/h
+      const condition = weather.weather[0].main;
+      
+      let safetyScore = 100;
+      let riskFactors = [];
+      let level = 'safe';
+      let recommendations = [];
+      
+      // 温度评估
+      if (temp < 0) {
+        safetyScore -= 30;
+        riskFactors.push('极低温度可能导致路面结冰');
+        recommendations.push({ icon: '🧥', text: '穿着保暖防滑装备' });
+      } else if (temp < 5) {
+        safetyScore -= 15;
+        riskFactors.push('低温天气需要注意保暖');
+        recommendations.push({ icon: '🧥', text: '注意保暖防寒' });
+      } else if (temp > 35) {
+        safetyScore -= 20;
+        riskFactors.push('高温天气容易中暑');
+        recommendations.push({ icon: '💧', text: '多补充水分，避免中暑' });
+      }
+      
+      // 风速评估
+      if (windSpeed > 60) {
+        safetyScore -= 40;
+        riskFactors.push('强风天气影响骑行稳定性');
+        recommendations.push({ icon: '🚫', text: '建议暂停骑行' });
+      } else if (windSpeed > 40) {
+        safetyScore -= 20;
+        riskFactors.push('大风天气需要格外小心');
+        recommendations.push({ icon: '⚠️', text: '降低速度，小心侧风' });
+      } else if (windSpeed > 20) {
+        safetyScore -= 10;
+        recommendations.push({ icon: '🐌', text: '适当降低骑行速度' });
+      }
+      
+      // 天气条件评估
+      if (condition.includes('暴雨') || condition.includes('雷')) {
+        safetyScore -= 60;
+        riskFactors.push('暴雨雷电天气极度危险');
+        recommendations.push({ icon: '🚫', text: '立即停止骑行，寻找安全场所' });
+      } else if (condition.includes('雨')) {
+        safetyScore -= 30;
+        riskFactors.push('雨天路面湿滑');
+        recommendations.push({ icon: '🐌', text: '降低速度，注意路面湿滑' });
+        recommendations.push({ icon: '☂️', text: '穿着雨具，提高可见性' });
+      } else if (condition.includes('雪') || condition.includes('冻')) {
+        safetyScore -= 40;
+        riskFactors.push('雪天路面极其湿滑');
+        recommendations.push({ icon: '🚫', text: '建议暂停骑行' });
+      } else if (condition.includes('雾') || condition.includes('霾')) {
+        safetyScore -= 25;
+        riskFactors.push('雾霾天气能见度低');
+        recommendations.push({ icon: '💡', text: '开启前后车灯' });
+        recommendations.push({ icon: '😷', text: '佩戴防护口罩' });
+      }
+      
+      // 确定安全等级
+      if (safetyScore >= 80) {
+        level = 'safe';
+        if (recommendations.length === 0) {
+          recommendations.push({ icon: '🚴', text: '适合正常速度骑行' });
+          recommendations.push({ icon: '👕', text: '根据温度选择合适衣物' });
+          recommendations.push({ icon: '💧', text: '记得及时补充水分' });
+        }
+      } else if (safetyScore >= 60) {
+        level = 'warning';
+      } else {
+        level = 'danger';
+      }
+      
+      return {
+        score: Math.max(0, safetyScore),
+        level: level,
+        riskFactors: riskFactors,
+        recommendations: recommendations
+      };
+    }
+
+    // 生成建议骑行时间
+    function generateBestRidingTimes(weather) {
+      const condition = weather.weather[0].main;
+      const temp = weather.main.temp;
+      const windSpeed = weather.wind.speed;
+      
+      const timeSlots = [
+        { time: '06:00', base: 'excellent' },
+        { time: '07:00', base: 'excellent' },
+        { time: '08:00', base: 'good' },
+        { time: '09:00', base: 'good' },
+        { time: '10:00', base: 'good' },
+        { time: '11:00', base: 'good' },
+        { time: '12:00', base: 'poor' },
+        { time: '13:00', base: 'poor' },
+        { time: '14:00', base: 'poor' },
+        { time: '15:00', base: 'good' },
+        { time: '16:00', base: 'good' },
+        { time: '17:00', base: 'good' },
+        { time: '18:00', base: 'excellent' },
+        { time: '19:00', base: 'excellent' },
+        { time: '20:00', base: 'good' }
+      ];
+      
+      return timeSlots.map(slot => {
+        let condition_text = '';
+        let final_level = slot.base;
+        
+        // 根据天气调整
+        if (condition.includes('雨') || condition.includes('雷')) {
+          final_level = 'poor';
+          condition_text = '雨天';
+        } else if (condition.includes('雾') || condition.includes('霾')) {
+          if (slot.time >= '06:00' && slot.time <= '09:00') {
+            final_level = 'poor';
+            condition_text = '雾霾';
+          } else {
+            condition_text = slot.base === 'excellent' ? '极佳' : 
+                           slot.base === 'good' ? '良好' : '一般';
+          }
+        } else if (temp > 30 && (slot.time >= '11:00' && slot.time <= '15:00')) {
+          final_level = 'poor';
+          condition_text = '高温';
+        } else if (windSpeed > 40) {
+          final_level = final_level === 'excellent' ? 'good' : 
+                       final_level === 'good' ? 'poor' : 'poor';
+          condition_text = '大风';
+        } else {
+          condition_text = slot.base === 'excellent' ? '极佳' : 
+                          slot.base === 'good' ? '良好' : '一般';
+        }
+        
+        return {
+          time: slot.time,
+          level: final_level,
+          condition: condition_text
+        };
+      }).filter(slot => {
+        const hour = parseInt(slot.time.split(':')[0]);
+        return hour >= 6 && hour <= 20;
+      }).slice(0, 6);
+    }
+
+    // 更新天气显示
+    function updateWeatherDisplay(weather) {
+      if (!weather) return;
+      
+      const safety = assessRidingSafety(weather);
+      const bestTimes = generateBestRidingTimes(weather);
+      
+      // 更新主要天气信息
+      const isDay = weather.isDay;
+      const weatherIcon = getWeatherIconFromAmap(weather.weather[0].main);
+      
+      document.getElementById('weatherTitleIcon').textContent = weatherIcon;
+      document.getElementById('weatherMainIcon').textContent = weatherIcon;
+      document.getElementById('tempValue').textContent = Math.round(weather.main.temp);
+      document.getElementById('weatherDescription').textContent = weather.weather[0].description;
+      
+      // 更新详细信息（适配高德数据格式）
+      document.getElementById('humidity').textContent = `${Math.round(weather.main.humidity)}%`;
+      document.getElementById('windSpeed').textContent = `${weather.wind.power}级`;
+      document.getElementById('windDirection').textContent = weather.wind.direction || '无风向';
+      document.getElementById('pressure').textContent = `${Math.round(weather.main.pressure)} hPa`;
+      
+      // 更新安全评估
+      const assessmentEl = document.getElementById('safetyAssessment');
+      const assessmentIcon = document.getElementById('assessmentIcon');
+      const assessmentLevel = document.getElementById('assessmentLevel');
+      const assessmentDescription = document.getElementById('assessmentDescription');
+      const weatherWarning = document.getElementById('weatherWarning');
+      const warningText = document.getElementById('warningText');
+      
+      // 移除旧的安全等级类
+      assessmentEl.classList.remove('safe', 'warning', 'danger');
+      assessmentEl.classList.add(safety.level);
+      
+      const safetyConfig = {
+        safe: { icon: '✅', level: '骑行安全', description: '当前天气条件适合骑行，建议正常骑行并注意交通安全。' },
+        warning: { icon: '⚠️', level: '需要注意', description: '天气条件可能影响骑行安全，请采取适当的预防措施。' },
+        danger: { icon: '🚨', level: '危险警告', description: '当前天气条件不适合骑行，建议暂停骑行计划。' }
+      };
+      
+      const config = safetyConfig[safety.level];
+      assessmentIcon.textContent = config.icon;
+      assessmentLevel.textContent = config.level;
+      assessmentDescription.textContent = config.description;
+      
+      // 显示/隐藏天气警告
+      if (safety.riskFactors.length > 0) {
+        weatherWarning.style.display = 'block';
+        warningText.textContent = safety.riskFactors.join('，');
+      } else {
+        weatherWarning.style.display = 'none';
+      }
+      
+      // 更新骑行建议
+      const recommendationList = document.getElementById('recommendationList');
+      recommendationList.innerHTML = '';
+      
+      safety.recommendations.forEach(rec => {
+        const li = document.createElement('li');
+        li.className = 'recommendation-item';
+        li.innerHTML = `
+          <span class="recommendation-icon">${rec.icon}</span>
+          <span>${rec.text}</span>
+        `;
+        recommendationList.appendChild(li);
+      });
+      
+      // 更新建议骑行时间
+      const timeSlots = document.getElementById('timeSlots');
+      timeSlots.innerHTML = '';
+      
+      bestTimes.forEach(slot => {
+        const div = document.createElement('div');
+        div.className = `time-slot ${slot.level}`;
+        div.innerHTML = `
+          <div class="slot-time">${slot.time}</div>
+          <div class="slot-condition">${slot.condition}</div>
+        `;
+        timeSlots.appendChild(div);
+      });
+    }
+
+    // 更新状态指示器
+    function updateWeatherStatus(status, message) {
+      const statusElement = document.getElementById('weatherStatus');
+      const statusText = document.getElementById('statusText');
+      
+      statusElement.className = `weather-status ${status}`;
+      statusText.textContent = message;
+    }
+
+    // 显示错误信息
+    function displayWeatherError(message) {
+      document.getElementById('tempValue').textContent = '--';
+      document.getElementById('weatherDescription').textContent = '获取失败';
+      document.getElementById('humidity').textContent = '--%';
+      document.getElementById('windSpeed').textContent = '-- 级';
+      document.getElementById('windDirection').textContent = '--';
+      document.getElementById('pressure').textContent = '-- hPa';
+      
+      document.getElementById('assessmentLevel').textContent = '数据获取失败';
+      document.getElementById('assessmentDescription').textContent = 
+        `无法获取天气数据: ${message}。建议检查网络连接或API配置。`;
+      
+      const recommendationList = document.getElementById('recommendationList');
+      recommendationList.innerHTML = `
+        <li class="recommendation-item">
+          <span class="recommendation-icon">❌</span>
+          <span>天气数据获取失败，请手动检查当前天气条件</span>
+        </li>
+        <li class="recommendation-item">
+          <span class="recommendation-icon">🔧</span>
+          <span>检查API配置或网络连接</span>
+        </li>
+      `;
+      
+      const timeSlots = document.getElementById('timeSlots');
+      timeSlots.innerHTML = `
+        <div class="time-slot poor">
+          <div class="slot-time">--:--</div>
+          <div class="slot-condition">数据不可用</div>
+        </div>
+      `;
+    }
+
+    // 通过城市名获取天气
+    async function fetchWeatherByCity(cityName) {
+      try {
+        updateWeatherStatus('online', `正在搜索城市: ${cityName}...`);
+        const cityInfo = await getCityAdcode(cityName);
+        currentAdcode = cityInfo.adcode;
+        currentCity = cityInfo.city;
+        
+        // 更新输入框显示
+        document.getElementById('cityInput').value = currentCity;
+        
+        // 更新城市快捷按钮状态
+        updateCityShortcuts(currentCity);
+        
+        await fetchAmapWeatherData(cityInfo.adcode);
+      } catch (error) {
+        console.error('通过城市获取天气失败:', error);
+        updateWeatherStatus('error', `城市搜索失败: ${error.message}`);
+        displayWeatherError(error.message);
+      }
+    }
+
+    // 通过IP定位获取天气
+    async function fetchWeatherByIP() {
+      try {
+        updateWeatherStatus('online', '正在通过IP定位...');
+        const locationInfo = await getCityByIP();
+        currentAdcode = locationInfo.adcode;
+        currentCity = locationInfo.city;
+        
+        // 更新输入框显示
+        document.getElementById('cityInput').value = `${locationInfo.province} ${locationInfo.city}`;
+        
+        // 更新城市快捷按钮状态
+        updateCityShortcuts(currentCity);
+        
+        await fetchAmapWeatherData(locationInfo.adcode);
+      } catch (error) {
+        console.error('通过IP定位获取天气失败:', error);
+        updateWeatherStatus('error', `IP定位失败: ${error.message}`);
+        displayWeatherError(error.message);
+      }
+    }
+
+    // 更新城市快捷按钮状态
+    function updateCityShortcuts(selectedCity) {
+      document.querySelectorAll('.city-shortcut').forEach(button => {
+        const buttonCity = button.getAttribute('data-city');
+        if (buttonCity === selectedCity || buttonCity.replace('市', '') === selectedCity.replace('市', '')) {
+          button.classList.add('active');
+        } else {
+          button.classList.remove('active');
+        }
+      });
+    }
+
+    // ========================================
+    // 时间显示函数
+    // ========================================
+
+    function updateTimeDisplay() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      
+      const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      const weekday = weekdays[now.getDay()];
+      
+      // 更新时间图标
+      const timeIcon = document.getElementById('timeIcon');
+      const hourInt = parseInt(hours);
+      const clockIcons = {
+        0: '🕐', 1: '🕐', 2: '🕑', 3: '🕒', 4: '🕓', 5: '🕔', 6: '🕕',
+        7: '🕖', 8: '🕗', 9: '🕘', 10: '🕙', 11: '🕚', 12: '🕐',
+        13: '🕐', 14: '🕑', 15: '🕒', 16: '🕓', 17: '🕔', 18: '🕕',
+        19: '🕖', 20: '🕗', 21: '🕘', 22: '🕙', 23: '🕚'
+      };
+      timeIcon.textContent = clockIcons[hourInt] || '🕐';
+      
+      // 更新日期
+      document.getElementById('current-date').textContent = `${year}-${month}-${day}`;
+      document.getElementById('current-weekday').textContent = weekday;
+      
+      // 更新数字时钟（带动画效果）
+      const hoursElement = document.getElementById('time-hours');
+      const minutesElement = document.getElementById('time-minutes');
+      const secondsElement = document.getElementById('time-seconds');
+      
+      // 检查是否需要更新，如果数字变化则添加动画
+      if (hoursElement.textContent !== hours) {
+        hoursElement.classList.add('time-flip');
+        setTimeout(() => {
+          hoursElement.textContent = hours;
+          hoursElement.classList.remove('time-flip');
+        }, 150);
+      }
+      
+      if (minutesElement.textContent !== minutes) {
+        minutesElement.classList.add('time-flip');
+        setTimeout(() => {
+          minutesElement.textContent = minutes;
+          minutesElement.classList.remove('time-flip');
+        }, 150);
+      }
+      
+      if (secondsElement.textContent !== seconds) {
+        secondsElement.classList.add('time-flip');
+        setTimeout(() => {
+          secondsElement.textContent = seconds;
+          secondsElement.classList.remove('time-flip');
+        }, 150);
+      }
+    }
+
+    // ========================================
+    // 电池相关函数
+    // ========================================
+
+    // 电压生成函数
+    function generateRandomVoltage() {
+      randomVoltage = (Math.random() * (7.6 - 7.5) + 7.5);
+      localStorage.setItem('randomVoltage', randomVoltage.toFixed(3));
+      console.log("🔋 Voltage Update: ", randomVoltage.toFixed(3));
+      return randomVoltage;
+    }
+
+    // current更新时用当前Voltage
+    function updateCurrent(current) {
+      const voltage = parseFloat(localStorage.getItem('randomVoltage'));
+      updateBatteryChart(voltage, current);
+    }
+
+    // 初始化电池容器
+    function initBatteryContainer() {
+      const initialLevel = 22;
+      const bar = document.getElementById('batteryLevelBar');
+      const text = document.getElementById('batteryText');
+      const wrapper = document.getElementById('batteryStatus');
+      
+      if (bar && text && wrapper) {
+        bar.style.width = initialLevel + '%';
+        text.textContent = initialLevel + '%';
+        wrapper.classList.remove('battery-medium', 'battery-low');
+        
+        if (initialLevel <= 20) {
+          wrapper.classList.add('battery-low');
+        } else if (initialLevel <= 60) {
+          wrapper.classList.add('battery-medium');
+        }
+        
+        localStorage.setItem('batteryLevel', initialLevel);
+        console.log(`🔋 电池容器已初始化: ${initialLevel}%`);
+      } else {
+        console.warn('⚠️ 电池容器元素未找到，初始化失败');
+      }
+    }
+
+    // 更新电池容器显示
+    function updateBatteryContainerDisplay(voltage, current) {
+
+      let currentLevel = 22;
+
+      const bar = document.getElementById('batteryLevelBar');
+      const text = document.getElementById('batteryText');
+      const wrapper = document.getElementById('batteryStatus');
+      if (!bar || !text || !wrapper) {
+        console.warn('⚠️ battery-container相关元素未找到');
+        return;
+      }
+      
+      wrapper.classList.add('battery-updating');
+      
+      setTimeout(() => {
+        bar.style.width = currentLevel + '%';
+        text.textContent = currentLevel + '%';
+        wrapper.classList.remove('battery-medium', 'battery-low', 'battery-high');
+
+        if (currentLevel <= 20) {
+          wrapper.classList.add('battery-low');
+        } else if (currentLevel <= 60) {
+          wrapper.classList.add('battery-medium');
+        } else {
+          wrapper.classList.add('battery-high');
+        }
+
+        localStorage.setItem('batteryLevel', currentLevel);
+        wrapper.classList.remove('battery-updating');
+        console.log(`🔋 battery-container已更新: ${voltage.toFixed(2)}V, ${current.toFixed(2)}A, ${currentLevel}%`);
+      }, 100);
+    }
+
+    // 电池数据清理函数
+    function cleanupBatteryData() {
+        try {
+            const batteryData = localStorage.getItem('batteryHistoryData');
+            if (batteryData) {
+                let parsedData = JSON.parse(batteryData);
+                if (Array.isArray(parsedData) && parsedData.length > window.maxBatteryDataPoints) {
+                    const removedCount = parsedData.length - window.maxBatteryDataPoints;
+                    parsedData = parsedData.slice(-window.maxBatteryDataPoints);
+                    localStorage.setItem('batteryHistoryData', JSON.stringify(parsedData));
+                    console.log(`🔋 电池数据清理完成，删除 ${removedCount} 条旧数据，保留最新 ${window.maxBatteryDataPoints} 条`);
+                }
+            }
+        } catch (error) {
+            console.error('❌ 电池数据清理失败:', error);
+        }
+    }
+
+    function initDistanceAndTargetCards() {
+      const distanceValueEl = document.getElementById('distance-value');
+      const targetValueEl = document.getElementById('target-value');
+      
+      if (!distanceValueEl || !targetValueEl) {
+        console.warn('⚠️ 距离或目标卡片元素未找到，初始化失败');
+        return;
+      }
+      
+      try {
+        // 获取历史数据
+        const storedData = localStorage.getItem('mockData');
+        let lastData = null;
+        
+        if (storedData) {
+          const mockData = JSON.parse(storedData);
+          
+          // 获取最近的有效数据
+          const dates = Object.keys(mockData).sort().reverse(); // 按日期倒序
+          
+          for (const date of dates) {
+            const data = mockData[date];
+            if (data && (data.Distance !== undefined || data.numTarget !== undefined)) {
+              lastData = data;
+              console.log(`📊 找到最近历史数据: ${date}`, data);
+              break;
+            }
+          }
+        }
+        
+        if (lastData) {
+          // 使用历史数据初始化
+          if (lastData.Distance !== undefined && lastData.Distance !== '--') {
+            distanceValueEl.innerHTML = `${parseFloat(lastData.Distance).toFixed(2)}<span class="stat-unit">m</span>`;
+          } else {
+            distanceValueEl.innerHTML = `--<span class="stat-unit">m</span>`;
+          }
+          
+          if (lastData.numTarget !== undefined && lastData.numTarget !== '--') {
+            targetValueEl.innerHTML = `${lastData.numTarget}<span class="stat-unit">个</span>`;
+          } else {
+            targetValueEl.innerHTML = `--<span class="stat-unit">个</span>`;
+          }
+          
+          console.log(`✅ 距离和目标卡片已用历史数据初始化`);
+          console.log(`   距离: ${lastData.Distance}m, 目标: ${lastData.numTarget}个`);
+        } else {
+          // 没有历史数据，使用默认值
+          distanceValueEl.innerHTML = `--<span class="stat-unit">m</span>`;
+          targetValueEl.innerHTML = `--<span class="stat-unit">个</span>`;
+          
+          console.log('📊 无历史数据，使用默认值初始化距离和目标卡片');
+        }
+        
+      } catch (error) {
+        console.error('❌ 初始化距离和目标卡片失败:', error);
+        
+        // 出错时使用默认值
+        distanceValueEl.innerHTML = `--<span class="stat-unit">m</span>`;
+        targetValueEl.innerHTML = `--<span class="stat-unit">个</span>`;
+      }
+    }
+
+    // 初始化所有图表
+    function initializeCharts() {
+      initBatteryChart();
+      
+      // 加载历史数据
+      loadChartHistoryData();
+      
+      console.log('📊 所有图表初始化完成');
+    }
+
+    // 初始化电池状态图表
+    function initBatteryChart() {
+
+      if (batteryChart) {
+        batteryChart.destroy();
+        batteryChart = null;
+      }
+
+      const ctx = document.getElementById('batteryChart').getContext('2d');
+      batteryChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: '电压 (V)',
+              data: [],
+              borderColor: '#4facfe',
+              backgroundColor: 'rgba(79, 172, 254, 0.1)',
+              fill: true,
+              yAxisID: 'y',
+              tension: 0.4
+            },
+            {
+              label: '电流 (A)',
+              data: [],
+              borderColor: '#ff6b6b',
+              backgroundColor: 'rgba(255, 107, 107, 0.1)',
+              fill: true,
+              yAxisID: 'y1',
+              tension: 0.4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#ffffff' } }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#ffffff' },
+              grid: { color: 'rgba(255,255,255,0.1)' }
+            },
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              ticks: { color: '#4facfe' },
+              grid: { color: 'rgba(79,172,254,0.1)' },
+              title: { display: true, text: '电压 (V)', color: '#4facfe' }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              ticks: { color: '#ff6b6b' },
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: '电流 (A)', color: '#ff6b6b' }
+            }
+          }
+        }
+      });
+    }
+
+    // 更新电池图表数据
+    function updateBatteryChart(voltage, current) {
+      if (!batteryChart) {
+        console.warn('⚠️ 电池图表未初始化，跳过数据更新');
+        return;
+      }
+
+      const now = new Date();
+      const timeLabel = now.toLocaleTimeString();
+      batteryHistory.voltage.push(voltage);
+      batteryHistory.current.push(current);
+      batteryHistory.timestamps.push(timeLabel);
+      
+      // 限制数据点数量，避免内存过载
+      if (batteryHistory.voltage.length > window.maxBatteryDataPoints) {
+        batteryHistory.voltage.shift();
+        batteryHistory.current.shift();
+        batteryHistory.timestamps.shift();
+      }
+      
+      // 保存到localStorage
+      saveBatteryHistory();
+      
+      if (batteryChart) {
+        batteryChart.data.labels = batteryHistory.timestamps;
+        batteryChart.data.datasets[0].data = batteryHistory.voltage;
+        batteryChart.data.datasets[1].data = batteryHistory.current;
+        batteryChart.update('none');
+      }
+      batteryChart.update('none');
+      console.log(`🔋 电池数据更新: ${voltage}V, ${current}A`);
+    }
+
+    // 加载历史图表数据
+    function loadChartHistoryData() {
+      loadBatteryHistory();
+      
+      if (batteryHistory.voltage.length > 0 && batteryChart) {
+        batteryChart.data.labels = batteryHistory.timestamps;
+        batteryChart.data.datasets[0].data = batteryHistory.voltage;
+        batteryChart.data.datasets[1].data = batteryHistory.current;
+        batteryChart.update('none');
+        console.log('📊 电池图表历史数据已恢复:', batteryHistory.voltage.length + '个数据点');
+      }
+      
+      console.log('📊 电池图表历史数据加载完成');
+    }
+
+    // 加载历史图表数据
+    function loadChartHistoryData() {
+      loadBatteryHistory();
+      
+      if (batteryHistory.voltage.length > 0 && batteryChart) {
+        batteryChart.data.labels = batteryHistory.timestamps;
+        batteryChart.data.datasets[0].data = batteryHistory.voltage;
+        batteryChart.data.datasets[1].data = batteryHistory.current;
+        batteryChart.update('none');
+        console.log('📊 电池图表历史数据已恢复:', batteryHistory.voltage.length + '个数据点');
+      }
+      
+      console.log('📊 电池图表历史数据加载完成');
+    }
+
+    // ========================================
+    // 主初始化函数
+    // ========================================
+
+    // 页面加载完成后的初始化
+    document.addEventListener("DOMContentLoaded", function () {
+      try {
+        console.log('🚀 开始初始化页面...');
+
+        // 1. 加载存储配置
+        const storageConfig = loadLocalStorageConfig();
+        // console.log(`📋 加载存储设置：${JSON.stringify(storageConfig)}`);
+        // window.maxBatteryDataPoints = storageConfig.maxBatteryDataPoints || 30;
+        
+        // 2. 清理和加载本地数据
+        // cleanupBatteryData();
+        initStorageConfigListener();
+        applyStorageLimits();    // 先初始化一次
+        loadLocalStorageData();               // 再加载本地数据
+
+        // 3. 初始化UI组件
+        initBatteryContainer();
+        initDistanceAndTargetCards();
+
+        // 4. 延迟初始化图表（确保DOM完全加载）
+        setTimeout(() => {
+          try {
+            initializeCharts();
+            console.log('📊 图表初始化完成');
+          } catch (error) {
+            console.error('❌ 图表初始化失败:', error);
+          }
+        }, 500);
+
+        // 5. 初始化时间显示
+        updateTimeDisplay();
+        setInterval(updateTimeDisplay, 1000);
+
+        // 6. 初始化天气系统
+        initializeWeather();
+        weatherUpdateInterval = setInterval(() => {
+          if (currentAdcode && AMAP_API_KEY !== 'YOUR_AMAP_API_KEY_HERE') {
+            fetchAmapWeatherData(currentAdcode);
+          }
+        }, 20 * 60 * 1000);
+
+        // 7. 处理历史数据和日期选项
+        const stored = localStorage.getItem("mockData");
+        if (stored) {
+          try {
+            let data = JSON.parse(stored);
+            
+            // 删除特定的7月9号数据
+            delete data["2025-07-09"];
+            
+            // 保留所有其他历史数据
+            localStorage.setItem("mockData", JSON.stringify(data));
+            mockData = data;
+            console.log('📝 历史数据已加载并清理');
+          } catch (e) {
+            console.warn('⚠️ 历史数据解析失败，清空数据:', e);
+            localStorage.removeItem("mockData");
+            mockData = {};
+          }
+        }
+        
+        // 8. 生成日期选项并设置默认选择
+        generateDateOptions("2025-06-04");
+
+        const today = new Date().toISOString().split("T")[0];
+        const selector = document.getElementById("dateSelector");
+        
+        if (selector) {
+          selector.value = today;
+          selector.dispatchEvent(new Event("change"));
+          console.log(`📅 日期选择器已设置为今天: ${today}`);
+        } else {
+          console.warn('⚠️ 日期选择器元素未找到');
+        }
+
+        // 9. 设置页面卸载清理
+        window.addEventListener('beforeunload', function() {
+          console.log('🧹 页面卸载，清理资源...');
+          
+          if (batteryChart) {
+            batteryChart.destroy();
+            batteryChart = null;
+            console.log('📊 电池图表已销毁');
+          }
+          
+          if (weatherUpdateInterval) {
+            clearInterval(weatherUpdateInterval);
+            console.log('🌤️ 天气更新定时器已清除');
+          }
+        });
+
+        console.log('页面初始化完成 ');
+
+      } catch (error) {
+        console.error('❌ 页面初始化失败:', error);
+        
+        // 基础错误处理 - 确保基本功能可用
+        try {
+          updateTimeDisplay();
+          setInterval(updateTimeDisplay, 1000);
+        } catch (timeError) {
+          console.error('❌ 时间显示初始化失败:', timeError);
+        }
+      }
+    });
+
+    // 计算骑行统计数据
+    function calculateRidingStatistics(dateStr) {
+      const data = mockData[dateStr];
+      if (!data || !data.path || data.path.length === 0) {
+        return {
+          duration: 0,
+          dangerCount: 0,
+          avgDistance: 0,
+          totalDistance: 0
+        };
+      }
+
+      // 计算危险事件次数（距离≤3米）
+      let dangerCount = 0;
+      const minDist = parseFloat(data.Distance);
+      if (!isNaN(minDist) && minDist <= 3) {
+        // 基于距离和路径长度估算危险事件次数
+        dangerCount = Math.floor(data.path.length / 10) || 1;
+      }
+
+      // 计算平均安全距离（模拟数据，实际应该基于所有记录点）
+      const avgDistance = !isNaN(minDist) ? minDist + Math.random() * 2 : 0;
+
+      return {
+        // duration: Math.round(duration),
+        dangerCount,
+        avgDistance: Math.round(avgDistance * 10) / 10
+        // totalDistance: Math.round(totalDistance * 100) / 100
+      };
+    }
+
+    // 更新统计显示
+    function updateStatisticsDisplay(dateStr) {
+      const stats = calculateRidingStatistics(dateStr);
+      
+      // 添加更新动画
+      const valueElements = [
+        document.getElementById('dangerCount'), 
+        document.getElementById('avgDistance')
+      ].filter(el => el !== null); // 过滤掉null元素
+
+      valueElements.forEach(el => el.classList.add('updating'));
+      
+      setTimeout(() => {
+        // 更新危险事件次数
+        const dangerEl = document.getElementById('dangerCount');
+        if (dangerEl) {
+          dangerEl.innerHTML = stats.dangerCount > 0 ? 
+            `${stats.dangerCount}<span class="stat-unit">次</span>` :
+            `0<span class="stat-unit">次</span>`;
+        }
+
+        // 更新平均距离
+        const avgDistEl = document.getElementById('avgDistance');
+        if (avgDistEl) {
+          avgDistEl.innerHTML = stats.avgDistance > 0 ? 
+            `${stats.avgDistance}<span class="stat-unit">米</span>` :
+            `--<span class="stat-unit">米</span>`;
+        }
+
+        // 更新趋势指示器
+        updateTrendIndicators(stats);
+
+        // 移除动画类
+        valueElements.forEach(el => el.classList.remove('updating'));
+      }, 300);
+    }
+
+    // 更新趋势指示器
+    function updateTrendIndicators(stats) {
+      const trends = {
+        danger: stats.dangerCount > 3 ? 'up' : stats.dangerCount > 0 ? 'neutral' : 'down',
+        distance: stats.avgDistance > 8 ? 'down' : stats.avgDistance > 5 ? 'neutral' : 'up'
+      };
+
+      const trendTexts = {
+        up: { danger: '需要注意', distance: '距离过近' },
+        neutral: { danger: '偶有危险', distance: '距离适中' },
+        down: { danger: '安全骑行', distance: '距离安全' }
+      };
+
+      const dangerTrendEl = document.getElementById('dangerTrend');
+      if (dangerTrendEl) {
+        dangerTrendEl.textContent = trendTexts[trends.danger].danger;
+        dangerTrendEl.className = `stat-trend ${trends.danger}`;
+      }
+
+      const distanceTrendEl = document.getElementById('distanceTrend');
+      if (distanceTrendEl) {
+        distanceTrendEl.textContent = trendTexts[trends.distance].distance;
+        distanceTrendEl.className = `stat-trend ${trends.distance}`;
+      }
+    }
+
+    // 刷新统计数据按钮事件
+    document.getElementById('refreshStatsBtn').addEventListener('click', function() {
+      const btn = this;
+      btn.classList.add('spinning');
+      
+      setTimeout(() => {
+        const selectedDate = document.getElementById('dateSelector').value;
+        if (selectedDate) {
+          updateStatisticsDisplay(selectedDate);
+        }
+        btn.classList.remove('spinning');
+      }, 1000);
+    });
+
+    // ========== 修复后的建议生成函数 ==========
+    function generateSmartRecommendation(numTarget, Distance) {
+      const vehicles = parseInt(numTarget) || 0;
+      const distance = parseFloat(Distance) || 0;
+      
+      // 使用统一的安全状态评估
+      const unifiedStatus = getUnifiedSafetyStatus(numTarget, Distance);
+      
+      let recommendation = {
+        priority: unifiedStatus.priority,
+        priorityColor: unifiedStatus.priorityColor,
+        icon: '🚴',
+        main: '',
+        analysis: '',
+        risk: '',
+        action: '',
+        actions: []
+      };
+      
+      // 根据统一的安全等级和具体情况生成建议
+      if (unifiedStatus.level === 'safe') {
+        if (vehicles === 0) {
+          recommendation.icon = '✅';
+          recommendation.main = '后方车辆距离充足，骑行环境理想';
+          recommendation.analysis = '雷达检测：后方无车辆信号';
+          recommendation.risk = '风险等级：极低，可以放心骑行';
+          recommendation.action = '建议：保持正常骑行速度，注意前方路况';
+          recommendation.actions = [
+            { icon: '🚴', text: '正常骑行' },
+            { icon: '👀', text: '观察前方' },
+            { icon: '🚦', text: '遵守信号' }
+          ];
+        } else if (vehicles <= 2 && distance >= 10) {
+          recommendation.icon = '🌟';
+          recommendation.main = `后方车辆距离${distance}米，骑行环境优良`;
+          recommendation.analysis = `理想环境：少量车辆且距离充足`;
+          recommendation.risk = '风险等级：低，标准城市骑行环境';
+          recommendation.action = '建议：保持正常骑行节奏，可适当加速';
+          recommendation.actions = [
+            { icon: '🚴', text: '正常骑行' },
+            { icon: '⚡', text: '可以加速' },
+            { icon: '🔄', text: '注意转弯' }
+          ];
+        } else {
+          recommendation.icon = '🟢';
+          recommendation.main = `后方车辆距离${distance}米，骑行状况良好`;
+          recommendation.analysis = `安全环境：车辆较少且距离安全`;
+          recommendation.risk = '风险等级：低，正常骑行状态';
+          recommendation.action = '建议：保持稳定骑行，注意交通规则';
+          recommendation.actions = [
+            { icon: '🚴', text: '稳定骑行' },
+            { icon: '🚦', text: '遵守信号' },
+            { icon: '✋', text: '规范示意' }
+          ];
+        }
+      } else if (unifiedStatus.level === 'warning') {
+        if (vehicles >= 7 || (vehicles >= 5 && distance < 8)) {
+          recommendation.icon = '🟡';
+          recommendation.main = `后方车辆距离${distance}米，交通密度较高需谨慎`;
+          recommendation.analysis = `拥堵环境：多车跟随，交通密度偏高`;
+          recommendation.risk = '风险等级：中高，需要格外注意安全';
+          recommendation.action = '建议：降低速度，减少变道，保持可预测路线';
+          recommendation.actions = [
+            { icon: '🐌', text: '适当减速' },
+            { icon: '🛣️', text: '减少变道' },
+            { icon: '👁️', text: '小心观察' }
+          ];
+        } else if (distance < 8) {
+          recommendation.icon = '⚠️';
+          recommendation.main = `后方车辆距离${distance}米，跟车距离偏近`;
+          recommendation.analysis = `警告距离：后方车辆跟随距离不够安全`;
+          recommendation.risk = '风险等级：中等，车辆反应时间有限';
+          recommendation.action = '建议：避免急刹车和急转向，保持稳定骑行';
+          recommendation.actions = [
+            { icon: '🚴', text: '平稳骑行' },
+            { icon: '🚫', text: '避免急动作' },
+            { icon: '👀', text: '增加观察' }
+          ];
+        } else {
+          recommendation.icon = '🟡';
+          recommendation.main = `后方车辆距离${distance}米，需要保持警觉`;
+          recommendation.analysis = `注意环境：车辆数量或距离需要关注`;
+          recommendation.risk = '风险等级：中等，建议提高注意力';
+          recommendation.action = '建议：保持防御性骑行，准备应对突发状况';
+          recommendation.actions = [
+            { icon: '🛡️', text: '小心骑行' },
+            { icon: '👂', text: '听觉警觉' },
+            { icon: '🔄', text: '准备避让' }
+          ];
+        }
+      } else if (unifiedStatus.level === 'danger') {
+        recommendation.icon = '🔴';
+        if (vehicles >= 5 && distance <= 3) {
+          recommendation.main = `危险！后方车辆距离仅${distance}米，极度拥挤`;
+          recommendation.analysis = `极危险：多车近距离跟随，追尾风险极高`;
+          recommendation.risk = '风险等级：极高，立即采取安全措施';
+          recommendation.action = '紧急措施：寻找安全位置靠边，让车辆通过';
+          recommendation.actions = [
+            { icon: '🚨', text: '寻找避让' },
+            { icon: '🐌', text: '缓慢减速' },
+            { icon: '➡️', text: '靠边缓行' }
+          ];
+        } else if (distance <= 3) {
+          recommendation.main = `警告！后方车辆距离仅${distance}米，请立即注意`;
+          recommendation.analysis = `危险距离：车辆跟随过近，制动距离不足`;
+          recommendation.risk = '风险等级：高，存在追尾风险';
+          recommendation.action = '立即行动：保持直线骑行，避免急刹车';
+          recommendation.actions = [
+            { icon: '➡️', text: '保持直线' },
+            { icon: '🚫', text: '禁止急刹' },
+            { icon: '🐌', text: '缓慢减速' },
+            { icon: '👀', text: '警惕观察' }
+          ];
+        } else {
+          recommendation.main = `后方车辆距离${distance}米，交通状况复杂`;
+          recommendation.analysis = `复杂环境：大量车辆可能导致突发状况`;
+          recommendation.risk = '风险等级：高，交通环境不稳定';
+          recommendation.action = '谨慎骑行：降低速度，随时准备应急措施';
+          recommendation.actions = [
+            { icon: '🐌', text: '显著降速' },
+            { icon: '🛡️', text: '小心骑行' },
+            { icon: '💡', text: '警示灯闪' },
+            { icon: '🔄', text: '随时避让' }
+          ];
+        }
+      }
+      
+      return recommendation;
+    }
+
+    // ========== 修复后的建议显示更新函数 ==========
+    function updateRecommendationDisplay(numTarget, Distance) {
+      const recommendation = generateSmartRecommendation(numTarget, Distance);
+      
+      // 更新优先级和颜色
+      const priorityValue = document.getElementById('priorityValue');
+      const recommendationCard = document.getElementById('recommendationCard');
+      const recommendationIcon = document.getElementById('recommendationIcon');
+      
+      priorityValue.textContent = recommendation.priority;
+      recommendationIcon.textContent = recommendation.icon;
+      
+      // 移除旧的优先级类
+      recommendationCard.classList.remove('priority-safe', 'priority-warning', 'priority-danger');
+      recommendationCard.classList.add(`priority-${recommendation.priorityColor}`);
+      
+      // 更新内容
+      document.getElementById('recommendationMain').textContent = recommendation.main;
+      document.getElementById('analysisDetail').textContent = recommendation.analysis;
+      document.getElementById('riskDetail').textContent = recommendation.risk;
+      document.getElementById('actionDetail').textContent = recommendation.action;
+      
+      // 更新操作按钮
+      const actionsContainer = document.getElementById('recommendationActions');
+      actionsContainer.innerHTML = '';
+      
+      recommendation.actions.forEach((action, index) => {
+        const actionButton = document.createElement('div');
+        actionButton.className = 'action-button';
+        actionButton.innerHTML = `
+          <span class="action-icon">${action.icon}</span>
+          <span class="action-text">${action.text}</span>
+        `;
+        actionButton.addEventListener('click', () => {
+          console.log(`执行操作: ${action.text}`);
+          // 这里可以添加具体的操作逻辑
+        });
+        actionsContainer.appendChild(actionButton);
+      });
+    }
+
+    // ========== 修复后的安全系数计算和显示函数 ==========
+    function getSafetyLevel(numTarget, Distance) {
+      const unifiedStatus = getUnifiedSafetyStatus(numTarget, Distance);
+      return {
+        level: unifiedStatus.level,
+        percentage: Math.round(unifiedStatus.percentage)
+      };
+    }
+
+    // ========== 统一的安全状态判断函数 ==========
+    function getUnifiedSafetyStatus(numTarget, Distance) {
+      const vehicles = parseInt(numTarget) || 0;
+      const distance = parseFloat(Distance);
+      
+      let level = 'safe';
+      let priority = '安全';
+      let priorityColor = 'safe';
+      let percentage = 100;
+      
+      // 如果距离数据无效
+      if (isNaN(distance)) {
+        return { 
+          level: 'unknown', 
+          priority: '未知', 
+          priorityColor: 'warning',
+          percentage: 50
+        };
+      }
+      
+      // 基于距离的基础风险评估
+      let baseRisk = 0;
+      if (distance <= 2) {
+        baseRisk = 90; // 极危险
+      } else if (distance <= 3) {
+        baseRisk = 80; // 非常危险
+      } else if (distance <= 5) {
+        baseRisk = 40; // 警告
+      } else if (distance <= 8) {
+        baseRisk = 20; // 轻微警告
+      } else {
+        baseRisk = 5; // 基本安全
+      }
+      
+      // 基于车辆数量的风险增量
+      let vehicleRisk = 0;
+      if (vehicles >= 10) {
+        vehicleRisk = 30; // 重度拥堵
+      } else if (vehicles >= 7) {
+        vehicleRisk = 20; // 中度拥堵
+      } else if (vehicles >= 5) {
+        vehicleRisk = 15; // 轻度拥堵
+      } else if (vehicles >= 3) {
+        vehicleRisk = 10; // 多车跟随
+      } else if (vehicles >= 2) {
+        vehicleRisk = 5; // 有车跟随
+      }
+      
+      // 距离和车辆数量的复合风险评估
+      let combinedRisk = baseRisk;
+      
+      // 当距离很近时，车辆数量的影响会被放大
+      if (distance <= 3) {
+        combinedRisk += vehicleRisk * 1.5; // 近距离时车辆风险放大1.5倍
+      } else if (distance <= 5) {
+        combinedRisk += vehicleRisk * 1.2; // 中距离时车辆风险放大1.2倍
+      } else {
+        combinedRisk += vehicleRisk; // 远距离时正常计算
+      }
+      
+      // 特殊情况：大量车辆 + 近距离 = 极度危险
+      if (vehicles >= 5 && distance <= 3) {
+        combinedRisk = Math.max(combinedRisk, 95);
+      }
+      
+      // 限制风险值在合理范围内
+      combinedRisk = Math.min(100, Math.max(0, combinedRisk));
+      
+      // 计算安全百分比（风险的反向）
+      percentage = Math.max(0, 100 - combinedRisk);
+      
+      // 确定安全等级
+      if (combinedRisk >= 70) {
+        level = 'danger';
+        priority = '危险';
+        priorityColor = 'danger';
+      } else if (combinedRisk >= 35) {
+        level = 'warning';
+        priority = '警告';
+        priorityColor = 'warning';
+      } else {
+        level = 'safe';
+        priority = '安全';
+        priorityColor = 'safe';
+      }
+      
+      return { level, priority, priorityColor, percentage };
+    }
+
+    // ========== 修复后的安全显示更新函数 ==========
+    function updateSafetyDisplay(Distance, numTarget = 0) {
+      const vehicles = parseInt(numTarget) || 0;
+      const distance = parseFloat(Distance);
+      
+      // 获取统一的安全状态
+      const unifiedStatus = getUnifiedSafetyStatus(numTarget, Distance);
+      const safetyData = getSafetyLevel(numTarget, Distance);
+      
+      // 更新图标
+      const iconElement = document.getElementById('safetyIcon');
+      const icons = {
+        safe: '🛡️',
+        warning: '⚠️',
+        danger: '🚨',
+        unknown: '❓'
+      };
+      iconElement.textContent = icons[unifiedStatus.level];
+      
+      // 更新状态文本
+      const statusText = document.getElementById('safety-level');
+      const statusMap = {
+        safe: '安全',
+        warning: '警告',
+        danger: '危险',
+        unknown: '未知'
+      };
+      statusText.textContent = `当前状态：${statusMap[unifiedStatus.level]}`;
+      
+      // 更新百分比
+      const percentageElement = document.getElementById('safetyPercentage');
+      percentageElement.textContent = `${unifiedStatus.percentage}%`;
+      
+      // 更新进度条
+      const progressFill = document.getElementById('safetyProgressFill');
+      const progressGlow = document.getElementById('safetyProgressGlow');
+      const progressBar = document.getElementById('safetyProgressBar');
+      
+      // 移除旧的类
+      progressBar.classList.remove('safe', 'warning', 'danger', 'unknown');
+      progressBar.classList.add(unifiedStatus.level);
+      
+      // 动画更新进度条
+      setTimeout(() => {
+        progressFill.style.width = `${unifiedStatus.percentage}%`;
+        progressGlow.style.width = `${unifiedStatus.percentage}%`;
+      }, 100);
+      
+      // 更新安全指标
+      document.getElementById('safetyDistance').textContent = 
+        isNaN(distance) ? '-- m' : `${distance.toFixed(1)} m`;
+      document.getElementById('safetyTargetCount').textContent = vehicles;
+      
+      // 更新威胁等级（基于综合评估）
+      const threatLevelElement = document.getElementById('threatLevel');
+      let threatLevel = '未知';
+      
+      if (vehicles === 0) {
+        threatLevel = '无';
+      } else if (!isNaN(distance)) {
+        switch(unifiedStatus.level) {
+          case 'safe':
+            if (vehicles <= 2) threatLevel = '极低';
+            else if (vehicles <= 5) threatLevel = '低';
+            else threatLevel = '中';
+            break;
+          case 'warning':
+            if (vehicles <= 3) threatLevel = '中';
+            else if (vehicles <= 7) threatLevel = '高';
+            else threatLevel = '很高';
+            break;
+          case 'danger':
+            if (vehicles >= 7 || distance <= 2) threatLevel = '极高';
+            else if (vehicles >= 5 || distance <= 3) threatLevel = '很高';
+            else threatLevel = '高';
+            break;
+        }
+      }
+      
+      threatLevelElement.textContent = threatLevel;
+      
+      // 更新智能建议
+      updateRecommendationDisplay(numTarget, Distance);
+    }
+
+    // ========== 生成从注册日起至今的所有日期 ==========
+    function generateDateOptions(startDateStr) {
+      const startDate = new Date(startDateStr);
+      const endDate = new Date();
+      const optionsContainer = document.getElementById("dateSelector");
+
+      const dateList = [];
+
+      let currentDate = new Date(endDate);
+      for (let i = 0; i < 30; i++) {
+        const dateStr = currentDate.toISOString().split("T")[0];
+        if (new Date(dateStr) >= startDate) {
+          dateList.push(dateStr);
+        }
+        currentDate.setDate(currentDate.getDate() - 1);
+      }
+
+      // 确保今天在列表中
+      const today = new Date().toISOString().split("T")[0];
+      if (!dateList.includes(today)) {
+        dateList.unshift(today); // 将今天添加到列表开头
+      }
+
+      dateList.forEach(dateStr => {
+        const option = document.createElement("option");
+        option.value = dateStr;
+        option.textContent = dateStr;
+        optionsContainer.appendChild(option);
+      });
+    }
+
+    // ========== 事件监听器 ==========
+    document.getElementById('setCityBtn').addEventListener('click', () => {
+      const cityName = document.getElementById('cityInput').value.trim();
+      if (cityName) {
+        fetchWeatherByCity(cityName);
+      } else {
+        alert('请输入城市名称');
+      }
+    });
+
+    document.getElementById('getCurrentLocationBtn').addEventListener('click', () => {
+      fetchWeatherByIP();
+    });
+
+    document.getElementById('cityInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('setCityBtn').click();
+      }
+    });
+
+    // 城市快捷按钮事件
+    document.querySelectorAll('.city-shortcut').forEach(button => {
+      button.addEventListener('click', () => {
+        const cityName = button.getAttribute('data-city');
+        document.getElementById('cityInput').value = cityName;
+        fetchWeatherByCity(cityName);
+      });
+    });
+
+    // 天气刷新按钮事件
+    document.getElementById('weatherRefreshBtn').addEventListener('click', function() {
+      const btn = this;
+      btn.classList.add('spinning');
+      
+      const refreshWeather = async () => {
+        try {
+          if (currentAdcode) {
+            await fetchAmapWeatherData(currentAdcode);
+          } else {
+            await fetchWeatherByCity(currentCity);
+          }
+        } catch (error) {
+          console.error('刷新天气失败:', error);
+        }
+      };
+      
+      refreshWeather().finally(() => {
+        setTimeout(() => {
+          btn.classList.remove('spinning');
+        }, 1000);
+      });
+    });
+
+    // 初始化天气数据
+    async function initializeWeather() {
+      // 检查API Key是否配置
+      if (AMAP_API_KEY === 'YOUR_AMAP_API_KEY_HERE') {
+        updateWeatherStatus('error', '请先配置高德地图API Key');
+        displayWeatherError('API Key未配置。请在代码中设置您的高德地图API Key。');
+        return;
+      }
+      
+      // 尝试使用缓存数据
+      const cached = localStorage.getItem('amapWeatherData');
+      if (cached) {
+        try {
+          const cachedData = JSON.parse(cached);
+          // 如果缓存数据不超过30分钟，先显示缓存数据
+          if (Date.now() - cachedData.timestamp < 1800000) {
+            weatherData = cachedData.data;
+            updateWeatherDisplay(weatherData);
+            updateWeatherStatus('offline', '显示缓存数据...');
+            currentAdcode = cachedData.adcode;
+          }
+        } catch (e) {
+          console.error('缓存数据解析失败:', e);
+        }
+      }
+      
+      // 获取新的天气数据
+      try {
+        await fetchWeatherByCity(currentCity);
+      } catch (error) {
+        console.error('初始化天气数据失败:', error);
+        if (!weatherData) {
+          // 尝试IP定位
+          try {
+            await fetchWeatherByIP();
+          } catch (ipError) {
+            displayWeatherError('初始化失败，请手动选择城市或检查网络连接');
+          }
+        }
+      }
+    }
+
+    // 初始化时间显示
+    updateTimeDisplay();
+    
+    // 每秒更新时间
+    setInterval(updateTimeDisplay, 1000);
+
+    // 启动天气初始化
+    initializeWeather();
+
+    // 设置定时更新天气数据（每20分钟）
+    weatherUpdateInterval = setInterval(() => {
+      if (currentAdcode && AMAP_API_KEY !== 'YOUR_AMAP_API_KEY_HERE') {
+        fetchAmapWeatherData(currentAdcode);
+      }
+    }, 20 * 60 * 1000);
+
+    // 添加位置到容器
+    function addLocationToContainer(dateStr, location) {
+      const now = new Date();
+      const cutoff = new Date(now);
+      cutoff.setDate(now.getDate() - 30);
+
+      if (!locationContainer[dateStr]) {
+        locationContainer[dateStr] = [];
+      }
+      locationContainer[dateStr].push(location);
+
+      for (const d in locationContainer) {
+        if (new Date(d) < cutoff) {
+          delete locationContainer[d];
+        }
+      }
+    }
+
+    // ========================================
+    // MQTT连接和数据处理
+    // ========================================
+
+    
+    // 初始化MQTT连接
+    client = mqtt.connect("ws://139.9.90.15:8083/mqtt", mqttOptions);
+
+    client.on("connect", () => {
+      console.log("✅ 已连接 MQTT broker");
+
+      client.publish("data_refresh", "", { retain: true }, (err) => {
+        if (!err) {
+          console.log("🧹 已清除 Broker 上的保留消息");
+        }
+      });
+
+      client.subscribe("data_refresh", err => {
+        if (!err) console.log("✅ 已订阅主题 data_refresh");
+      });
+    });
+
+    client.on("error", error => {
+      console.error("❌ MQTT 错误", error);
+    });
+
+    // MQTT消息处理
+    client.on("message", (topic, message) => {
+      if (topic === "data_refresh") {
+        try {
+          const data = JSON.parse(message.toString());
+          const { date, numTarget, Distance, location, Voltage, current } = data;
+          // 基本数据校验
+          if (!date) {
+            console.warn("⚠️ 缺少date字段，忽略此消息");
+            return;
+          }
+          let currentValue = 0;
+          const voltage = generateRandomVoltage();
+          if (current < 0.35) {
+            currentValue = 0.35;
+          }
+          else if (current > 0.5) {
+            currentValue = 0.5;
+          }
+          else {
+            currentValue = current;
+          }      
+          
+          // 处理电池数据
+          if (typeof Voltage !== 'undefined' && typeof current !== 'undefined') {
+            
+            // 更新电池图表
+            updateBatteryChart(voltage, currentValue);
+            updateBatteryContainerDisplay(voltage, currentValue);
+            batterylevel = 22;
+            // 更新 DOM
+            const bar = document.getElementById('batteryLevelBar');
+            const text = document.getElementById('batteryText');
+            const wrapper = document.getElementById('batteryStatus');
+
+            bar.style.width = batterylevel + '%';
+            text.textContent = batterylevel + '%';
+            wrapper.classList.remove('battery-medium', 'battery-low');
+            if (batterylevel <= 20) wrapper.classList.add('battery-low');
+            else if (batterylevel <= 60) wrapper.classList.add('battery-medium');
+
+            localStorage.setItem('batteryLevel', batterylevel);
+            console.log(`🔋 电池状态已更新: ${voltage}V, ${currentValue}A, ${batterylevel}%`);
+          } else if (typeof current !== 'undefined') {
+            // 如果只有current，使用当前保存的Voltage
+            updateCurrent(currentValue);
+            updateBatteryContainerDisplay(voltage, currentValue);
+          }
+
+          // 更新其他数据
+          if (typeof Distance !== 'undefined') {
+            document.getElementById('distance-value').textContent = Distance.toFixed(2);
+          }
+          
+          if (typeof numTarget !== 'undefined') {
+            document.getElementById('target-value').textContent = '检测到';
+          }
+
+          const selector = document.getElementById("dateSelector");
+          const optionExists = [...selector.options].some(opt => opt.value === date);
+          
+          // 初始化或获取现有数据
+          if (!mockData[date]) {
+            mockData[date] = {
+              numTarget: 0,
+              Distance: '--',
+              path: [],
+              Voltage: 0,
+              Current: 0
+            };
+          }
+
+          // 更新基础数据（这些数据总是更新）
+          if (typeof numTarget !== 'undefined') {
+            mockData[date].numTarget = numTarget;
+            console.log(`✅ 更新numTarget: ${numTarget}`);
+          }
+
+          if (typeof Distance !== 'undefined') {
+            mockData[date].Distance = Distance;
+            console.log(`✅ 更新minDistance: ${Distance}`);
+          }
+
+          if (typeof Voltage !== 'undefined' && typeof current !== 'undefined') {
+            mockData[date].Voltage = voltage;
+            mockData[date].Current = parseFloat(currentValue.toFixed(2));
+            console.log(`✅ 更新电池数据: ${mockData[date].Voltage}V, ${mockData[date].Current}A`);
+          }
+
+          // location校验和处理
+          if (Array.isArray(location) && location.length >= 2) {
+            const [lat, lng] = location;
+            const numLat = parseFloat(lat);
+            const numLng = parseFloat(lng);
+
+            // 检查坐标是否有效
+            if (!isNaN(numLat) && !isNaN(numLng)) {
+              // 检查是否在贵阳市范围内
+              if (isLocationInGuiyang(numLat, numLng)) {
+                // 坐标有效且在贵阳市内，添加到路径
+                if (!mockData[date].path) mockData[date].path = [];
+                mockData[date].path.push([numLat, numLng]);
+                
+                console.log(`✅ 添加有效贵阳坐标: [${numLat.toFixed(6)}, ${numLng.toFixed(6)}]`);
+              } else {
+                console.warn(`⚠️ 坐标不在贵阳市范围内: [${numLat.toFixed(6)}, ${numLng.toFixed(6)}]，保留上次有效位置`);
+                // 不更新location，保持原有路径数据
+              }
+            } else {
+              console.warn(`⚠️ 无效的坐标数据: [${lat}, ${lng}]，保留上次有效位置`);
+            }
+          } else if (location !== undefined) {
+            console.warn(`⚠️ location格式错误:`, location, "保留上次有效位置");
+          }
+
+          // 保存到localStorage
+          localStorage.setItem("mockData", JSON.stringify(mockData));
+
+          // 更新UI
+          if (!optionExists) {
+            const option = document.createElement("option");
+            option.value = date;
+            option.textContent = date;
+            selector.prepend(option);
+          }
+
+          // 如果当前选中的是这个日期，更新显示
+          if (selector.value === date) {
+            selector.dispatchEvent(new Event("change"));
+          } else {
+            selector.value = date;
+            selector.dispatchEvent(new Event("change"));
+          }
+          applyStorageLimits();
+        } catch (e) {
+          console.error("❌ MQTT数据解析失败:", e);
+          console.error("❌ 原始消息:", message.toString());
+        }
+      }
+    });
+
+    // ========================================
+    // 地图初始化和事件处理
+    // ========================================
+
+    // 初始化地图
+    map = L.map('map').setView([30.7538, 103.9280], 11);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap 贡献者'
+    }).addTo(map);
+
+    // 日期选择器事件监听
+    document.getElementById("dateSelector").addEventListener("change", function () {
+      const selectedDate = this.value;
+      const data = mockData[selectedDate];
+
+      if (data) {
+        document.getElementById("numTarget").textContent = data.numTarget;
+        document.getElementById("Distance").textContent = data.Distance;
+
+        // 使用新的安全系数更新函数，传入车辆数量
+        updateSafetyDisplay(data.Distance, data.numTarget);
+
+        // 更新统计面板
+        updateStatisticsDisplay(selectedDate);
+
+        if (currentPolyline) map.removeLayer(currentPolyline);
+        currentMarkers.forEach(marker => map.removeLayer(marker));
+        currentMarkers = [];
+
+        currentPolyline = L.polyline(data.path, { color: 'blue' }).addTo(map);
+        data.path.forEach(coord => {
+          const marker = L.marker(coord).addTo(map);
+          currentMarkers.push(marker);
+        });
+        map.fitBounds(currentPolyline.getBounds());
+      } else {
+        document.getElementById("numTarget").textContent = "--";
+        document.getElementById("Distance").textContent = "--";
+        updateSafetyDisplay("--", 0);
+        updateStatisticsDisplay(selectedDate);
+      }
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", function () {
+      window.location.href = "index.html";
+    });
+
+    document.getElementById("clearLocalBtn").addEventListener("click", function () {
+      // 弹窗确认是否清除电池历史数据
+      if (confirm("是否要清除所有数据？\n\n点击确定：清除所有数据（包括电池历史）\n点击取消：仅清除骑行数据，保留电池历史")) {
+        // 清除所有数据
+        localStorage.removeItem("mockData");
+        localStorage.removeItem("batteryHistoryData");
+        mockData = {};
+        batteryHistory = { voltage: [], current: [], timestamps: [] };
+        alert("所有本地数据已清除！");
+      } else {
+        // 仅清除骑行数据，保留电池历史
+        localStorage.removeItem("mockData");
+        mockData = {};
+        alert("骑行数据已清除，电池历史数据已保留！");
+      }
+      
+      document.getElementById("numTarget").textContent = "--";
+      document.getElementById("Distance").textContent = "--";
+      updateSafetyDisplay("--", 0);
+      updateStatisticsDisplay("--");
+      location.reload();
+    });
+
+    // 页面卸载时清理定时器
+    window.addEventListener('beforeunload', function() {
+      if (weatherUpdateInterval) {
+        clearInterval(weatherUpdateInterval);
+      }
+    });
+        // 弹窗相关引用
+    const modalOverlay = document.getElementById('modalOverlay');
+    const modalMsg     = document.getElementById('modalMsg');
+    const btnOk        = document.getElementById('modalOk');
+    const btnCancel    = document.getElementById('modalCancel');
+
+    /**
+     * 显示自定义弹窗
+     * @param {string} text 提示文字
+     * @param {Function} onConfirm 点击确定后的回调
+     */
+    function showModal(text, onConfirm) {
+      modalMsg.textContent = text;
+      modalOverlay.classList.add('active');
+      btnOk.onclick = () => {
+        modalOverlay.classList.remove('active');
+        if (onConfirm) onConfirm();
+      };
+      btnCancel.onclick = () => {
+        modalOverlay.classList.remove('active');
+      };
+    }
+
+    // 示例：替换 alert
+    document.getElementById('toStaticBtn').addEventListener('click', () => {
+      showModal('你已停止工作，进入休息模式', () => {
+        client.publish('mode_change', '0');
+        window.location.href = 'page2.html';
+      });
+    });
+    // ========================================
+    // 事件监听器设置
+    // ========================================
+
+    // 页面卸载时清理定时器
+    window.addEventListener('beforeunload', function() {
+      if (weatherUpdateInterval) {
+        clearInterval(weatherUpdateInterval);
+      }
+    });
+
+    // 刷新统计数据按钮事件
+    const refreshStatsBtn = document.getElementById('refreshStatsBtn');
+    if (refreshStatsBtn) {
+      refreshStatsBtn.addEventListener('click', function() {
+        const btn = this;
+        btn.classList.add('spinning');
+        
+        setTimeout(() => {
+          const selectedDate = document.getElementById('dateSelector').value;
+          if (selectedDate) {
+            updateStatisticsDisplay(selectedDate);
+          }
+          btn.classList.remove('spinning');
+        }, 1000);
+      });
+    }
+
+    // 切换到静态页面按钮
+    const toStaticBtn = document.getElementById('toStaticBtn');
+    if (toStaticBtn) {
+      toStaticBtn.addEventListener('click', () => {
+        showModal('你已停止工作，进入休息模式', () => {
+          if (client) client.publish('mode_change', '0');
+          window.location.href = 'page2.html';
+        });
+      });
+    }
+
+    // 登出按钮
+    const logoutBtn = document.getElementById("logoutBtn");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", function () {
+        window.location.href = "index.html";
+      });
+    }
+
+    // 清除本地数据按钮
+    const clearLocalBtn = document.getElementById("clearLocalBtn");
+    if (clearLocalBtn) {
+      clearLocalBtn.addEventListener("click", function () {
+        if (confirm("是否要清除所有数据？\n\n点击确定：清除所有数据（包括电池历史）\n点击取消：仅清除骑行数据，保留电池历史")) {
+          localStorage.removeItem("mockData");
+          localStorage.removeItem("batteryHistoryData");
+          mockData = {};
+          batteryHistory = { voltage: [], current: [], timestamps: [] };
+          alert("所有本地数据已清除！");
+        } else {
+          localStorage.removeItem("mockData");
+          mockData = {};
+          alert("骑行数据已清除，电池历史数据已保留！");
+        }
+        
+        document.getElementById("numTarget").textContent = "--";
+        document.getElementById("Distance").textContent = "--";
+        updateSafetyDisplay("--", 0);
+        updateStatisticsDisplay("--");
+        location.reload();
+      });
+    }
+
+    // 初始化电压生成和电池状态
+    generateRandomVoltage();
+    setInterval(generateRandomVoltage, 10000);
+    
+    const savedLevel = parseInt(localStorage.getItem('batteryLevel'), 10);
+    const bar = document.getElementById('batteryLevelBar');
+    const text = document.getElementById('batteryText');
+    const wrapper = document.getElementById('batteryStatus');
+
+    if (bar && text && wrapper) {
+      bar.style.width = batterylevel + '%';
+      text.textContent = batterylevel + '%';
+      wrapper.classList.remove('battery-medium','battery-low');
+      if (batterylevel <= 20) wrapper.classList.add('battery-low');
+      else if (batterylevel <= 60) wrapper.classList.add('battery-medium');
+      localStorage.setItem('batteryLevel', batterylevel);
+    }
+  </script>
+</body>
+</html>

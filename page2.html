@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>静态安全预警</title>
+
+  <link rel="stylesheet" href="style.css"/>
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+  <!-- 引入 Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { position: relative; }
+
+ 
+
+    /* 顶部电量指示 */
+    .battery-status {
+      position: absolute; top: 16px; right: 20px; display: flex;
+      align-items: center; z-index: 10;
+    }
+    .battery-icon {
+      width:40px; height:18px; border:2px solid rgba(255,255,255,0.8);
+      border-radius:4px; background:rgba(255,255,255,0.1);
+      overflow:hidden; margin-right:6px; position:relative;
+    }
+    .battery-icon::after {
+      content:""; position:absolute; top:4px; right:-6px;
+      width:6px; height:10px; background:rgba(255,255,255,0.8);
+      border-radius:2px;
+    }
+    .battery-level {
+      height:100%; width:0;
+      background:linear-gradient(90deg,#76FF03,#AEEA00);
+      transition:width .5s ease, background .5s;
+      position: relative;
+    }
+    
+    .battery-level::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        to bottom,
+        rgba(255,255,255,0.3) 0%,
+        rgba(255,255,255,0.1) 50%,
+        rgba(255,255,255,0) 51%,
+        rgba(255,255,255,0.1) 100%
+      );
+    }
+    
+    .battery-medium .battery-level {
+      background:linear-gradient(90deg,#FFD740,#FFC400);
+    }
+    .battery-low .battery-level {
+      background:linear-gradient(90deg,#FF5252,#FF1744);
+      animation: batteryPulse 1.5s infinite;
+    }
+    
+    @keyframes batteryPulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+    .battery-text {
+      color:#fff; font-weight:600;
+      font-size:clamp(14px,2.5vw,18px);
+      text-shadow:0 0 4px rgba(0,0,0,0.5);
+    }
+
+    /* 电池状态卡片样式 */
+    .battery-details {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    
+    .battery-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 6px;
+      border-left: 3px solid #4facfe;
+    }
+    
+    .battery-info-row .label {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.8);
+      font-weight: 500;
+    }
+    
+    .battery-info-row .value {
+      font-size: 1.1rem;
+      color: #fff;
+      font-weight: 600;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+
+    h1 { text-align:center; margin-top:1.5em; }
+
+    /* 报警卡片网格 */
+    .alarm-grid {
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+      gap:clamp(20px,3vw,30px);
+      margin:clamp(40px,5vw,60px) 0;
+    }
+    .alarm-card h2 { margin-bottom:clamp(16px,3vw,24px); }
+    .alarm-status {
+      font-size:clamp(20px,4vw,28px);
+      font-weight:700; text-shadow:0 0 10px rgba(0,0,0,0.3);
+    }
+
+    /* 报警激活状态 */
+    .alarm-card.alarm-active {
+      animation: alarmBlink 1s infinite;
+      border: 2px solid #ff4444;
+    }
+    
+    .alarm-card.battery-low {
+      border-left: 4px solid #ff4444;
+    }
+    
+    .alarm-card.battery-medium {
+      border-left: 4px solid #ffaa00;
+    }
+    
+    .alarm-card.battery-high {
+      border-left: 4px solid #44ff44;
+    }
+    
+    @keyframes alarmBlink {
+      0% { box-shadow: 0 0 5px rgba(255, 68, 68, 0.5); }
+      50% { box-shadow: 0 0 20px rgba(255, 68, 68, 0.8); }
+      100% { box-shadow: 0 0 5px rgba(255, 68, 68, 0.5); }
+    }
+
+    /* 建议列表 */
+    .recommendation-list {
+      list-style:none; padding:0; margin:0;
+      display:flex; flex-direction:column; gap:12px;
+    }
+    .recommendation-item {
+      background:rgba(255,255,255,0.05);
+      backdrop-filter:blur(10px);
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:8px;
+      padding:10px;
+      display:flex; align-items:center; gap:8px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    /* 电池监测图表样式 */
+    .charts-container {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 20px;
+      margin: 20px 0;
+    }
+
+    .chart-card {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 20px;
+      backdrop-filter: blur(10px);
+      transition: all 0.3s ease;
+    }
+
+    .chart-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .chart-title {
+      color: #ffffff;
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chart-canvas {
+      height: 300px;
+      position: relative;
+    }
+
+    @media (max-width: 768px) {
+      .charts-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* 地图容器 */
+    #map {
+      width:100%; height:clamp(250px,40vh,400px);
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.1);
+      margin-top:20px;
+    }
+    
+    /* 地图控制区域 */
+    .map-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .map-controls span {
+      color: #fff;
+      font-size: 0.9rem;
+    }
+    
+    #syncMapBtn {
+      background: linear-gradient(135deg, #4facfe, #00f2fe);
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    
+    #syncMapBtn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
+    }
+
+    /* 自定义弹窗 */
+    /* 自定义弹窗覆盖层 */
+    /* 自定义弹窗覆盖层 */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .modal-overlay.active {
+      display: flex;
+    }
+
+    /* 弹窗主体（移除霓虹渐变框，改为简洁半透明边框） */
+    .modal {
+      position: relative;
+      width: 400px;
+      max-width: 90%;
+      padding: 32px 24px;
+      background: rgba(20, 20, 40, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.4),
+        0 8px 20px rgba(0, 0, 0, 0.5);
+      text-align: center;
+      color: #fff;
+    }
+
+    .modal h3 {
+      margin: 0 0 16px;
+      font-size: 20px;
+      font-weight: 600;
+      text-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal p {
+      margin: 0 0 24px;
+      font-size: 16px;
+      line-height: 1.4;
+    }
+
+    .modal-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .modal-btn {
+      min-width: 100px;
+      padding: 10px 0;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .modal-btn.primary {
+      background: linear-gradient(135deg, #ff6ec4, #7873f5);
+      border: none;
+      box-shadow: 0 4px 12px rgba(120, 115, 245, 0.6);
+      color: #fff;
+    }
+    .modal-btn.primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(120, 115, 245, 0.8);
+    }
+
+    .modal-btn.secondary {
+      background: transparent;
+      border: 2px solid rgba(255, 255, 255, 0.6);
+      color: #fff;
+    }
+    .modal-btn.secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-2px);
+    }
+
+  </style>
+</head>
+<body>
+
+
+  <div class="page-container">
+   
+    <!-- 模式切换 -->
+  <button id="toCyclingBtn" class="toggle-btn">点击进入工作模式<span class ="work-icon">🔧</span></button>    
+   <!-- 电量 -->
+  <div class="battery-status" id="batteryStatus">
+    <div class="battery-icon">
+      <div class="battery-level" id="batteryLevelBar"></div>
+    </div>
+    <div class="battery-text" id="batteryText">--%</div>
+  </div>
+    <h1>静态安全预警运行中</h1>
+      <!-- 优化后的时间显示卡片 -->
+    <div class="data-card time-card">
+      <h2>
+        <span class="time-icon" id="timeIcon">🕐</span>
+        当前时间
+      </h2>
+      <div class="time-display">
+        <div class="date-section">
+          <div class="current-date" id="current-date">2025-07-19</div>
+          <div class="current-weekday" id="current-weekday">星期六</div>
+        </div>
+        
+        <div class="time-section">
+          <div class="digital-clock" id="digital-clock">
+            <span class="time-hours" id="time-hours">12</span>
+            <span class="time-separator">:</span>
+            <span class="time-minutes" id="time-minutes">44</span>
+            <span class="time-separator">:</span>
+            <span class="time-seconds" id="time-seconds">06</span>
+          </div>
+          <div class="time-zone" id="time-zone">UTC+8 北京时间</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="alarm-grid">
+      <div class="data-card alarm-card danger">
+        <h2>🔥 火灾报警</h2>
+        <div id="fireAlarmStatus" class="alarm-status">正常</div>
+      </div>
+      <div class="data-card alarm-card warning">
+        <h2>⚡ 防盗震动报警</h2>
+        <div id="vibrationAlarmStatus" class="alarm-status">正常</div>
+      </div>
+      <div class="data-card alarm-card info">
+        <h2>🔋 电池状态</h2>
+        <div class="battery-details">
+          <div class="battery-info-row">
+            <span class="label">电压:</span>
+            <span id="voltageDisplay" class="value">--V</span>
+          </div>
+          <div class="battery-info-row">
+            <span class="label">电流:</span>
+            <span id="currentDisplay" class="value">--A</span>
+          </div>
+          <div class="battery-info-row">
+            <span class="label">电量:</span>
+            <span id="batteryPercentageDisplay" class="value">--%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 电池监测图表区域 -->
+    <div class="data-card">
+      <h2>📊 电池电压/电流监测</h2>
+      
+      <div class="charts-container">
+        <!-- 实时电池数据图表 -->
+        <div class="chart-card">
+          <h3 class="chart-title">
+            <span>🔋</span>
+            电池电压/电流实时监测
+          </h3>
+          <div class="chart-canvas">
+            <canvas id="batteryChart2"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="data-card">
+      <h2>💡 安全提示</h2>
+      <ul id="suggestions" class="recommendation-list"></ul>
+    </div>
+    <div class="data-card">
+      <h2>🗺️ 骑行地图</h2>
+      <div class="map-controls">
+        <span>显示历史骑行路径</span>
+        <button id="syncMapBtn" onclick="syncMapData()">🔄 同步路径</button>
+      </div>
+      <div id="map"></div>
+    </div>
+  </div>
+
+  <!-- 自定义弹窗 -->
+  <div id="modalOverlay" class="modal-overlay">
+  <div class="modal">
+    <h3>提示</h3>
+    <p id="modalMessage">这里是提示内容</p>
+    <div class="modal-buttons">
+      <button id="modalCancel" class="modal-btn secondary">取消</button>
+      <button id="modalOk"     class="modal-btn primary">确定</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <script>
+    // 图表相关变量
+    let batteryChart2 = null;
+    let batteryDataHistory = {
+      voltage: [],
+      current: [],
+      timestamps: []
+    };
+
+    // 地图初始化与路径同步
+    const B = {north:27.209,south:25.652,east:107.394,west:105.612};
+    const inB = (la,lo)=> la>=B.south && la<=B.north && lo>=B.west && lo<=B.east;
+    const map=L.map('map').setView([26.553,106.528],11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution:'&copy; OpenStreetMap'}).addTo(map);
+    let poly,marks=[];
+    
+    // 从本地数据中加载存储配置
+    function loadLocalStorageConfig() {
+      try {
+          const configData = localStorage.getItem('storageConfig');
+          if (configData) {
+              const config = JSON.parse(configData);
+              console.log('从控制台同步存储配置:', config);
+              window.maxBatteryDataPoints = config.maxBatteryDataPoints || 30;
+              window.maxLocationDataPoints = config.maxLocationDataPoints || 30;
+              window.maxHistoryDays = config.maxHistoryDays || 30;
+              return {
+                  maxBatteryDataPoints: config.maxBatteryDataPoints || 30,
+                  maxLocationDataPoints: config.maxLocationDataPoints || 30,
+                  maxHistoryDays: config.maxHistoryDays || 30,
+                  lastUpdated: config.lastUpdated
+              };
+          } else {
+              console.log('⚠️ 未找到存储配置，使用默认值');
+              return getDefaultStorageConfig();
+          }
+      } catch (error) {
+          console.error('❌ 读取存储配置失败:', error);
+          return getDefaultStorageConfig();
+      }
+    }
+
+    function initStorageConfigListener() {
+      // 监听storage事件（跨标签页通信）
+      window.addEventListener('storage', function(e) {
+          if (e.key === 'storageConfig' && e.newValue) {
+              try {
+                  const newConfig = JSON.parse(e.newValue);
+                  console.log('🔄 检测到存储配置更新:', newConfig);
+                  
+                  // 更新全局配置
+                  window.maxBatteryDataPoints = newConfig.maxBatteryDataPoints || 30;
+                  window.maxLocationDataPoints = newConfig.maxLocationDataPoints || 30;
+                  window.maxHistoryDays = newConfig.maxHistoryDays || 30;
+                  
+                  // 立即应用新的存储限制
+                  applyStorageLimits(newConfig);
+                  
+                  console.log('✅ 存储配置已同步更新');
+              } catch (error) {
+                  console.error('❌ 解析存储配置失败:', error);
+              }
+          }
+        });
+        
+        console.log('👂 存储配置监听器已启动');
+    }
+
+    function applyStorageLimits(config) {
+        
+        try {
+            // 1. 清理电池历史数据
+            cleanupBatteryData();
+
+            // 2. 清理路径位置数据
+            cleanupLocationData();
+            
+            // 3. 清理历史天数数据
+            cleanupHistoryDays();
+            
+            console.log(`📊 存储限制已应用:
+                - 电池数据点: ${window.maxBatteryDataPoints}
+                - 位置数据点: ${window.maxLocationDataPoints}  
+                - 历史天数: ${window.maxDays}`);
+                
+        } catch (error) {
+            console.error('❌ 应用存储限制失败:', error);
+        }
+    }
+
+    function cleanupBatteryData() {
+        try {
+            const batteryData = localStorage.getItem('batteryHistoryData');
+            if (batteryData) {
+                const data = JSON.parse(batteryData);
+                
+                // 检查数据结构
+                if (data.voltage && Array.isArray(data.voltage)) {
+                    if (data.voltage.length > window.maxBatteryDataPoints) {
+                        const removedCount = data.voltage.length - window.maxBatteryDataPoints;
+
+                        // 保留最新的数据点
+                        data.voltage = data.voltage.slice(-window.maxBatteryDataPoints);
+                        data.current = (data.current || []).slice(-window.maxBatteryDataPoints);
+                        data.timestamps = (data.timestamps || []).slice(-window.maxBatteryDataPoints);
+
+                        // 更新localStorage
+                        localStorage.setItem('batteryHistoryData', JSON.stringify(data));
+                        
+                        // 更新内存中的数据
+                        batteryHistory = {
+                            voltage: data.voltage,
+                            current: data.current,
+                            timestamps: data.timestamps
+                        };
+                        
+                        // 更新图表显示
+                        if (batteryChart2) {
+                            batteryChart2.data.labels = batteryHistory.timestamps;
+                            batteryChart2.data.datasets[0].data = batteryHistory.voltage;
+                            batteryChart2.data.datasets[1].data = batteryHistory.current;
+                            batteryChart2.update('none');
+                        }
+                        
+                        console.log(`🔋 电池数据清理完成，删除 ${removedCount} 条旧数据，保留最新 ${window.maxBatteryDataPoints} 条`);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ 清理电池数据失败:', error);
+        }
+    }
+
+    function cleanupLocationData() {
+        try {
+            const storedData = localStorage.getItem('mockData');
+            if (storedData) {
+                const data = JSON.parse(storedData);
+                let totalCleaned = 0;
+                
+                // 遍历每天的数据
+                Object.keys(data).forEach(date => {
+                    if (data[date].path && Array.isArray(data[date].path)) {
+                        const originalLength = data[date].path.length;
+                        
+                        if (originalLength > window.maxLocationDataPoints) {
+                            // 保留最新的位置点
+                            data[date].path = data[date].path.slice(-window.maxLocationDataPoints);
+                            totalCleaned += originalLength - window.maxLocationDataPoints;
+                            
+                            console.log(`📍 ${date} 位置数据: ${originalLength} → ${data[date].path.length}`);
+                        }
+                    }
+                });
+                
+                if (totalCleaned > 0) {
+                    // 更新localStorage
+                    localStorage.setItem('mockData', JSON.stringify(data));
+                    
+                    // 更新内存中的数据
+                    mockData = data;
+                    
+                    console.log(`🗺️ 位置数据清理完成，总共删除 ${totalCleaned} 个位置点`);
+                    
+                    // 如果当前显示的日期有数据更新，刷新地图
+                    const currentDate = document.getElementById('dateSelector').value;
+                    if (currentDate && data[currentDate]) {
+                        updateMapDisplay(currentDate);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('❌ 清理位置数据失败:', error);
+        }
+    }
+
+    function cleanupHistoryDays() {
+        try {
+            const storedData = localStorage.getItem('mockData');
+            if (storedData) {
+                const data = JSON.parse(storedData);
+                const cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - window.maxDays);
+                
+                let deletedDays = 0;
+                const datesToDelete = [];
+                
+                // 找出需要删除的日期
+                Object.keys(data).forEach(date => {
+                    const dateObj = new Date(date);
+                    if (dateObj < cutoffDate) {
+                        datesToDelete.push(date);
+                    }
+                });
+                
+                // 删除过期数据
+                datesToDelete.forEach(date => {
+                    delete data[date];
+                    deletedDays++;
+                });
+                
+                if (deletedDays > 0) {
+                    // 更新localStorage
+                    localStorage.setItem('mockData', JSON.stringify(data));
+                    
+                    // 更新内存中的数据
+                    mockData = data;
+                    
+                    // 重新生成日期选项
+                    const dateSelector = document.getElementById('dateSelector');
+                    const currentValue = dateSelector.value;
+                    
+                    // 清空并重新生成选项
+                    dateSelector.innerHTML = '';
+                    generateDateOptions("2025-06-04");
+                    
+                    // 尝试恢复之前选择的日期，如果不存在则选择今天
+                    const today = new Date().toISOString().split("T")[0];
+                    if (data[currentValue]) {
+                        dateSelector.value = currentValue;
+                    } else {
+                        dateSelector.value = today;
+                    }
+                    dateSelector.dispatchEvent(new Event("change"));
+                    
+                    console.log(`📅 历史数据清理完成，删除 ${deletedDays} 天的数据，保留最近 ${window.maxDays} 天`);
+                }
+            }
+        } catch (error) {
+            console.error('❌ 清理历史数据失败:', error);
+        }
+    }
+
+    // 从localStorage加载电池历史数据（与page.html同步）
+    function loadBatteryHistory() {
+      try {
+        const stored = localStorage.getItem('batteryHistoryData');
+        if (stored) {
+          const data = JSON.parse(stored);
+          batteryDataHistory = {
+            voltage: data.voltage || [],
+            current: data.current || [],
+            timestamps: data.timestamps || []
+          };
+          console.log('📊 电池历史数据已同步加载:', batteryDataHistory.voltage.length + '个数据点');
+          
+          // 更新图表显示
+          if (batteryChart2 && batteryDataHistory.voltage.length > 0) {
+            batteryChart2.data.labels = batteryDataHistory.timestamps;
+            batteryChart2.data.datasets[0].data = batteryDataHistory.voltage;
+            batteryChart2.data.datasets[1].data = batteryDataHistory.current;
+            batteryChart2.update('none');
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ 电池历史数据加载失败:', e);
+        batteryDataHistory = { voltage: [], current: [], timestamps: [] };
+      }
+    }
+    
+    // 保存电池历史数据到localStorage（与page.html同步）
+    function saveBatteryHistory() {
+      try {
+        localStorage.setItem('batteryHistoryData', JSON.stringify(batteryDataHistory));
+      } catch (e) {
+        console.warn('⚠️ 电池历史数据保存失败:', e);
+      }
+    }
+    
+    // 初始化电池监测图表
+    function initializeBatteryChart() {
+      const ctx = document.getElementById('batteryChart2').getContext('2d');
+      batteryChart2 = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '电压 (V)',
+            data: [],
+            borderColor: '#4facfe',
+            backgroundColor: 'rgba(79, 172, 254, 0.1)',
+            yAxisID: 'y',
+            tension: 0.4
+          }, {
+            label: '电流 (A)',
+            data: [],
+            borderColor: '#43e97b',
+            backgroundColor: 'rgba(67, 233, 123, 0.1)',
+            yAxisID: 'y1',
+            tension: 0.4
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#ffffff' }
+            }
+          },
+          scales: {
+            x: {
+              ticks: { color: '#ffffff' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' }
+            },
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              ticks: { color: '#ffffff' },
+              grid: { color: 'rgba(255, 255, 255, 0.1)' },
+              title: {
+                display: true,
+                text: '电压 (V)',
+                color: '#ffffff'
+              }
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              ticks: { color: '#ffffff' },
+              grid: { drawOnChartArea: false },
+              title: {
+                display: true,
+                text: '电流 (A)',
+                color: '#ffffff'
+              }
+            }
+          }
+        }
+      });
+      
+      // 加载历史数据到图表显示
+      loadBatteryHistory();
+    }
+
+    // 更新电池图表数据（与page.html保持同步）
+    function updateBatteryChart(voltage, current) {
+      if (!batteryChart2) return;
+      
+      const now = new Date();
+      const timeLabel = now.toLocaleTimeString();
+      
+      // 保存到历史数据
+      batteryDataHistory.voltage.push(voltage);
+      batteryDataHistory.current.push(current);
+      batteryDataHistory.timestamps.push(timeLabel);
+      
+      // 限制数据点数量（与page.html保持一致）
+      if (batteryDataHistory.voltage.length > window.maxBatteryDataPoints) {
+        batteryDataHistory.voltage.shift();
+        batteryDataHistory.current.shift();
+        batteryDataHistory.timestamps.shift();
+      }
+      
+      // 更新图表
+      batteryChart2.data.labels = batteryDataHistory.timestamps;
+      batteryChart2.data.datasets[0].data = batteryDataHistory.voltage;
+      batteryChart2.data.datasets[1].data = batteryDataHistory.current;
+      batteryChart2.update('none');
+      
+      // 保存到localStorage（与page.html使用相同的key）
+      saveBatteryHistory();
+      
+      console.log(`🔋 page2电池图表更新: ${voltage}V, ${current}A`);
+    }
+
+    // 更新电池卡片显示
+    function updateBatteryCard(voltage, current) {
+      const batteryPercentage = Math.max(0, Math.min(100, ((voltage - 7.0) / (8.4 - 7.0)) * 100));
+      const stablelevel = 22;
+      document.getElementById('voltageDisplay').textContent = `${voltage.toFixed(3)}V`;
+      document.getElementById('currentDisplay').textContent = `${current.toFixed(3)}A`;
+      document.getElementById('batteryPercentageDisplay').textContent = `${stablelevel.toFixed(1)}%`;
+      
+      // 根据电池状态更新卡片颜色
+      const batteryCard = document.querySelector('.data-card.alarm-card.info');
+      if (batteryCard) {
+        batteryCard.classList.remove('battery-low', 'battery-medium', 'battery-high');
+        if (stablelevel <= 20) {
+          batteryCard.classList.add('battery-low');
+        } else if (stablelevel <= 60) {
+          batteryCard.classList.add('battery-medium');
+        } else {
+          batteryCard.classList.add('battery-high');
+        }
+      }
+      
+      console.log(`🔋 电池卡片更新: ${voltage}V, ${current}A, ${stablelevel.toFixed(1)}%`);
+    }
+
+    // 电池显示更新函数
+    function updateBatteryDisplay(voltage, current, level = null) {
+      console.log(`🔋 更新电池显示: 电压=${voltage}V, 电流=${current}A`);
+      if (level === null) {
+        const maxVoltage = 7.8; // 满电电压
+        const minVoltage = 6.4; // 最低可用电压
+        level = Math.round(((voltage - minVoltage) / (maxVoltage - minVoltage)) * 100);
+        level = Math.max(0, Math.min(100, level)); // 限制在 0-100 范围
+      }
+      // const batteryPercentage = Math.max(0, Math.min(100, ((voltage - 6.4) / (7.8 - 6.4)) * 100));
+      level = 22;
+      // 获取DOM元素
+      const batteryLevelBar = document.getElementById('batteryLevelBar');
+      const batteryText = document.getElementById('batteryText');
+      const batteryStatus = document.getElementById('batteryStatus');
+      
+      if (!batteryLevelBar || !batteryText || !batteryStatus) {
+        console.error("❌ 找不到电池显示元素");
+        return;
+      }
+      
+      // 更新电池电量条宽度
+      batteryLevelBar.style.width = `${level}%`;
+      
+      // 更新电池状态类名和颜色
+      batteryStatus.classList.remove('battery-medium', 'battery-low');
+      
+      if (level <= 20) {
+        batteryStatus.classList.add('battery-low');
+        console.log("🔴 电池电量低");
+      } else if (level <= 60) {
+        batteryStatus.classList.add('battery-medium');
+        console.log("🟡 电池电量中等");
+      } else {
+        console.log("🟢 电池电量充足");
+      }
+      
+      // 更新电池文字显示
+      batteryText.textContent = `${level.toFixed(1)}%`;
+      
+      // 保存电池数据到本地存储
+      localStorage.setItem('batteryLevel', level);
+      localStorage.setItem('lastVoltage', voltage);
+      localStorage.setItem('lastCurrent', current);
+      
+      console.log(`✅ 电池状态更新完成: ${level.toFixed(1)}%`);
+    }
+
+    // 防盗震动检测函数
+    function checkVibrationAlarm(angle_x, angle_y, state) {
+      console.log(`🔍 状态检测: state=${state}, angle_x=${angle_x}°, angle_y=${angle_y}°`);
+      
+      let isVibrationDetected = false;
+      let alarmReasons = [];
+
+      // 获取震动报警和火灾报警的DOM元素
+      const vibrationStatus = document.getElementById('vibrationAlarmStatus');
+      const vibrationCard = vibrationStatus.closest('.alarm-card');
+      const fireStatus = document.getElementById('fireAlarmStatus');
+      const fireCard = fireStatus.closest('.alarm-card');
+
+      if (state === 0) {
+        // 正常状态 - 清除所有报警
+        vibrationStatus.textContent = '正常';
+        vibrationCard.classList.remove('alarm-active');
+        fireStatus.textContent = '正常';
+        fireCard.classList.remove('alarm-active');
+        console.log('✅ 系统检测正常');
+        
+      } else if (state === 1) {
+        // 震动预警 - 更新震动报警卡片
+        isVibrationDetected = true;
+        alarmReasons.push(`震动预警 (X:${angle_x.toFixed(2)}°, Y:${angle_y.toFixed(2)}°)`);
+        vibrationStatus.textContent = '报警中';
+        vibrationCard.classList.add('alarm-active');
+        
+        // 确保火灾报警卡片是正常状态
+        fireStatus.textContent = '正常';
+        fireCard.classList.remove('alarm-active');
+        
+        console.log(`🚨 检测到震动报警: ${alarmReasons.join(', ')}`);
+        
+        // 保存报警信息
+        localStorage.setItem('vibrationAlarmReasons', JSON.stringify(alarmReasons));
+        localStorage.setItem('vibrationAlarmTime', new Date().toISOString());
+        
+      } else if (state === 2) {
+        // 火灾预警 - 更新火灾报警卡片
+        fireStatus.textContent = '报警中';
+        fireCard.classList.add('alarm-active');
+        
+        // 确保震动报警卡片是正常状态
+        vibrationStatus.textContent = '正常';
+        vibrationCard.classList.remove('alarm-active');
+        
+        console.log('🔥 检测到火灾预警');
+        
+        // 保存火灾报警信息
+        localStorage.setItem('fireAlarmTime', new Date().toISOString());
+        localStorage.setItem('fireAlarmActive', 'true');
+      }
+
+      // 保存最新传感器数据
+      localStorage.setItem('sensorData', JSON.stringify({
+        angle_x, angle_y,
+        state,
+        timestamp: new Date().toISOString()
+      }));
+
+      return isVibrationDetected;
+    }
+
+    function updateSuggestions(){
+      const fire = document.getElementById('fireAlarmStatus').textContent;
+      const vib  = document.getElementById('vibrationAlarmStatus').textContent;
+      const batteryText = document.getElementById('batteryText').textContent;
+      const lvl = parseFloat(batteryText.replace('%', '')) || 0;
+      
+      const arr = [];
+      
+      // 检查报警状态
+      if(fire==='报警中') {
+        const fireAlarmTime = localStorage.getItem('fireAlarmTime');
+        arr.push('🔥 检测到火灾预警，请立即检查现场并确保人员安全！');
+        if (fireAlarmTime) {
+          const time = new Date(fireAlarmTime).toLocaleTimeString();
+          arr.push(`⏰ 火灾报警时间：${time}`);
+        }
+        arr.push('🚨 请立即：1) 断开电源 2) 检查火源 3) 准备灭火器材');
+      }
+      if(vib==='报警中') {
+        // 获取震动报警的具体原因
+        const alarmReasons = JSON.parse(localStorage.getItem('vibrationAlarmReasons') || '[]');
+        const alarmTime = localStorage.getItem('vibrationAlarmTime');
+        
+        if (alarmReasons.length > 0) {
+          arr.push(`🚨 检测到震动异常：${alarmReasons[0]}`);
+          if (alarmTime) {
+            const time = new Date(alarmTime).toLocaleTimeString();
+            arr.push(`⏰ 报警时间：${time}`);
+          }
+        } else {
+          arr.push('⚡ 检测到设备震动，请检查安全状况！');
+        }
+      }
+      
+      // 根据电池电量级别提供建议
+      if(lvl <= 10) {
+        arr.push(`🔋 电量极低（${lvl.toFixed(1)}%），请立即充电！`);
+      } else if(lvl <= 20) {
+        arr.push(`⚠️ 电量较低（${lvl.toFixed(1)}%），建议及时充电！`);
+      } else if(lvl <= 30) {
+        arr.push(`📱 电量一般（${lvl.toFixed(1)}%），可考虑充电。`);
+      } else if(lvl >= 90) {
+        arr.push(`✅ 电量充足（${lvl.toFixed(1)}%），设备状态良好！`);
+      }
+      
+      // 从本地存储获取最新的电压和电流数据
+      const lastVoltage = localStorage.getItem('lastVoltage');
+      const lastCurrent = localStorage.getItem('lastCurrent');
+      
+      if (lastVoltage && lastCurrent) {
+        const voltage = parseFloat(lastVoltage);
+        const current = parseFloat(lastCurrent);
+        
+        if (voltage < 7.2) {
+          arr.push(`⚡ 电压过低（${voltage}V），请检查电源系统！`);
+        }
+        
+        if (current > 3.0) {
+          arr.push(`⚡ 电流较高（${current}A），请注意设备功耗！`);
+        }
+      }
+      
+      // 检查传感器数据
+      const sensorData = JSON.parse(localStorage.getItem('sensorData') || '{}');
+      if (sensorData.timestamp) {
+        const lastUpdate = new Date(sensorData.timestamp);
+        const now = new Date();
+        const timeDiff = (now - lastUpdate) / 1000; // 秒
+        
+        if (timeDiff > 30) {
+          arr.push('📡 传感器数据超过30秒未更新，请检查连接！');
+        }
+      }
+      
+      // 如果没有警告，显示正常状态
+      if(!arr.length) {
+        arr.push('✅ 系统正常运行，所有指标正常！');
+      }
+      
+      // 更新建议列表
+      document.getElementById('suggestions').innerHTML =
+        arr.map(x => `<li class="recommendation-item">💡 ${x}</li>`).join('');
+    }
+
+  
+    /* ------------  地图函数  ------------ */
+
+    function draw(p){
+      if(poly) map.removeLayer(poly);
+      marks.forEach(m=>map.removeLayer(m)); marks=[];
+      const c = (p||[]).map(e=>[+e[0],+e[1]])
+        .filter(([la,lo])=>inB(la,lo));
+      if(!c.length) return;
+      
+      // 创建路径线条（与page.html保持一致的蓝色）
+      poly=L.polyline(c,{color:'blue', weight: 4}).addTo(map);
+      
+      // 创建标记点（使用与page.html相同的marker样式）
+      c.forEach(coord => {
+        const marker = L.marker(coord).addTo(map);  // 使用标准marker而不是circleMarker
+        marks.push(marker);
+      });
+      
+      // 自动调整地图视野到路径范围
+      map.fitBounds(poly.getBounds());
+    }
+    
+    // 同步地图路径数据
+    function syncMapData() {
+      try {
+        const mockData = JSON.parse(localStorage.getItem('mockData') || '{}');
+        const today = new Date().toISOString().split('T')[0];
+        
+        // 优先加载今天的数据
+        if (mockData[today] && mockData[today].path && mockData[today].path.length > 0) {
+          console.log(`🗺️ 加载今天的路径数据: ${mockData[today].path.length}个点`);
+          draw(mockData[today].path);
+          return;
+        }
+        
+        // 如果今天没有数据，加载最近有数据的日期
+        const dates = Object.keys(mockData).sort().reverse(); // 按日期倒序
+        for (const date of dates) {
+          if (mockData[date] && mockData[date].path && mockData[date].path.length > 0) {
+            console.log(`🗺️ 加载${date}的路径数据: ${mockData[date].path.length}个点`);
+            draw(mockData[date].path);
+            return;
+          }
+        }
+        
+        console.log('🗺️ 暂无可用的路径数据');
+      } catch (e) {
+        console.warn('⚠️ 地图数据同步失败:', e);
+      }
+    }
+    
+    // 页面加载时初始化地图数据
+    (function(){ 
+      // 延迟500ms确保localStorage数据已经就绪
+      setTimeout(() => {
+        syncMapData();
+      }, 500);
+    })();
+
+    // 定期检查并同步地图数据（每10秒检查一次）
+    setInterval(syncMapData, 10000);
+
+    let lastMockDataString = localStorage.getItem('mockData') || '{}';
+    
+    function checkMockDataChanges() {
+      const currentMockDataString = localStorage.getItem('mockData') || '{}';
+      if (currentMockDataString !== lastMockDataString) {
+        console.log('🔄 检测到mockData变化，同步地图数据');
+        syncMapData();
+        lastMockDataString = currentMockDataString;
+      }
+    }
+    
+    setInterval(checkMockDataChanges, 1000);
+    
+    let randomVoltage = 7.56; // 改为let，不是const
+    function generateRandomVoltage() {
+      // 设定电压范围 7.5~7.6V
+      randomVoltage = (Math.random() * (7.6 - 7.5) + 7.5);
+      localStorage.setItem('randomVoltage', randomVoltage.toFixed(3));
+      console.log("🔋 Voltage Update: ", randomVoltage.toFixed(3));
+      return randomVoltage;
+    }  
+
+    // MQTT 统一处理
+    const mqttOptions = {
+      clean: true,
+      connectTimeout: 4000,
+      reconnectPeriod: 4000
+    };
+
+    const client = mqtt.connect('ws://139.9.90.15:8083/mqtt', mqttOptions);
+
+    client.on('connect', () => {
+      console.log("✅ 已连接 MQTT broker");
+
+      // 清除保留消息：发送空消息并设置 retain=true
+      client.publish("data_refresh", "", { retain: true }, (err) => {
+        if (!err) {
+          console.log("🧹 已清除 Broker 上的保留消息");
+        }
+      });
+
+      client.subscribe("data_refresh", err => {
+        if (!err) console.log("✅ 已订阅主题 data_refresh");
+      });
+    });
+
+    client.on("error", error => {
+      console.error("❌ MQTT 错误", error);
+    });
+
+    client.on("message", (topic, message) => {
+      if (topic === "data_refresh") {
+        try {
+          const data = JSON.parse(message.toString());
+          const { Voltage, current, angle_x, angle_y, state, location, date } = data;          
+          
+                    console.log("📥 接收到MQTT数据:", data);
+
+          const currentVoltage = generateRandomVoltage();
+          let currentValue = 0;
+          if (current < 0.35) {
+            currentValue = 0.35;
+          }
+          else if (current > 0.5) {
+            currentValue = 0.5;
+          }
+          else {
+            currentValue = current;
+          }
+
+          // 处理电池电压和电流数据
+          if (typeof Voltage !== 'undefined' && typeof current !== 'undefined') {
+            updateBatteryDisplay(parseFloat(currentVoltage), parseFloat(currentValue));
+            updateBatteryCard(parseFloat(currentVoltage), parseFloat(currentValue));
+            updateBatteryChart(parseFloat(currentVoltage), parseFloat(currentValue));
+          }
+
+          // 处理震动和角度数据，检测防盗报警
+          if (typeof angle_x !== 'undefined' && typeof angle_y !== 'undefined' && typeof state !== 'undefined') {
+            checkVibrationAlarm(parseFloat(angle_x), parseFloat(angle_y), parseInt(state));
+          }
+
+          // 处理位置更新 - 同步page.html中的位置数据
+          if (Array.isArray(location) && location.length >= 2 && date) {
+            const [lat, lng] = location;
+            const numLat = parseFloat(lat);
+            const numLng = parseFloat(lng);
+            
+            // 检查坐标是否有效且在贵阳市范围内
+            if (!isNaN(numLat) && !isNaN(numLng) && inB(numLat, numLng)) {
+              // 更新本地存储的路径数据
+              try {
+                const mockData = JSON.parse(localStorage.getItem('mockData') || '{}');
+                if (!mockData[date]) {
+                  mockData[date] = { path: [] };
+                }
+                if (!mockData[date].path) {
+                  mockData[date].path = [];
+                }
+                
+                // 检查是否为重复坐标，避免重复添加
+                const lastPoint = mockData[date].path[mockData[date].path.length - 1];
+                const isDuplicate = lastPoint && 
+                  Math.abs(lastPoint[0] - numLat) < 0.0001 && 
+                  Math.abs(lastPoint[1] - numLng) < 0.0001;
+                
+                if (!isDuplicate) {
+                  // 添加新的位置点
+                  mockData[date].path.push([numLat, numLng]);
+                  localStorage.setItem('mockData', JSON.stringify(mockData));
+                  
+                  // 实时更新地图（不限制日期，显示最新的路径数据）
+                  draw(mockData[date].path);
+                  console.log(`🗺️ 已同步更新地图位置[${date}]:`, [numLat, numLng]);
+                } else {
+                  console.log('⚠️ 坐标重复，跳过添加');
+                }
+              } catch (e) {
+                console.error('❌ 位置数据同步失败:', e);
+              }
+            } else {
+              console.warn(`⚠️ 无效坐标或超出贵阳范围: [${numLat}, ${numLng}]`);
+            }
+          }
+          
+          // 处理来自page.html的路径数据同步（如果没有实时location数据）
+          if (!location && date) {
+            // 检查是否有其他页面更新的路径数据
+            setTimeout(syncMapData, 1000); // 延迟100ms执行同步，确保localStorage已更新
+          }
+
+          // 更新建议列表
+          updateSuggestions();
+
+        } catch (e) {
+          console.error("❌ MQTT数据解析失败:", e);
+          console.error("❌ 原始消息:", message.toString());
+        }
+      }
+    });
+
+    // 自定义弹窗
+    const overlay     = document.getElementById('modalOverlay');
+    const msgEl       = document.getElementById('modalMessage');
+    const okBtn       = document.getElementById('modalOk');
+    const cancelBtn   = document.getElementById('modalCancel');
+
+
+    function showModal(text, onConfirm) {
+      msgEl.textContent = text;
+      overlay.classList.add('active');
+
+      // 确定
+      okBtn.onclick = () => {
+        overlay.classList.remove('active');
+        onConfirm && onConfirm();
+      };
+
+      // 取消
+      cancelBtn.onclick = () => {
+        overlay.classList.remove('active');
+      };
+    }
+
+    // ========== 优化后的时间显示函数 ==========
+    function updateTimeDisplay() {
+      const now = new Date();
+      
+      // 获取各个时间组件
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      
+      // 获取星期
+      const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+      const weekday = weekdays[now.getDay()];
+      
+      // 更新时间图标（根据小时变化）
+      const timeIcon = document.getElementById('timeIcon');
+      const hourInt = parseInt(hours);
+      const clockIcons = {
+        0: '🕐', 1: '🕐', 2: '🕑', 3: '🕒', 4: '🕓', 5: '🕔', 6: '🕕',
+        7: '🕖', 8: '🕗', 9: '🕘', 10: '🕙', 11: '🕚', 12: '🕐',
+        13: '🕐', 14: '🕑', 15: '🕒', 16: '🕓', 17: '🕔', 18: '🕕',
+        19: '🕖', 20: '🕗', 21: '🕘', 22: '🕙', 23: '🕚'
+      };
+      timeIcon.textContent = clockIcons[hourInt] || '🕐';
+      
+      // 更新日期
+      document.getElementById('current-date').textContent = `${year}-${month}-${day}`;
+      document.getElementById('current-weekday').textContent = weekday;
+      
+      // 更新数字时钟（带动画效果）
+      const hoursElement = document.getElementById('time-hours');
+      const minutesElement = document.getElementById('time-minutes');
+      const secondsElement = document.getElementById('time-seconds');
+      
+      // 检查是否需要更新，如果数字变化则添加动画
+      if (hoursElement.textContent !== hours) {
+        hoursElement.classList.add('time-flip');
+        setTimeout(() => {
+          hoursElement.textContent = hours;
+          hoursElement.classList.remove('time-flip');
+        }, 150);
+      }
+      
+      if (minutesElement.textContent !== minutes) {
+        minutesElement.classList.add('time-flip');
+        setTimeout(() => {
+          minutesElement.textContent = minutes;
+          minutesElement.classList.remove('time-flip');
+        }, 150);
+      }
+      
+      if (secondsElement.textContent !== seconds) {
+        secondsElement.classList.add('time-flip');
+        setTimeout(() => {
+          secondsElement.textContent = seconds;
+          secondsElement.classList.remove('time-flip');
+        }, 150);
+      }
+    }
+    
+    // 初始化时间显示
+    updateTimeDisplay();
+    
+    // 每秒更新时间
+    setInterval(updateTimeDisplay, 1000);
+
+    // 示例：切换按钮触发弹窗
+    document.getElementById('toCyclingBtn').addEventListener('click', () => {
+      showModal('即将开始工作，加油!', () => {
+        client.publish('mode_change', '1');
+        window.location.href = 'page.html';
+      });
+    });
+
+    document.addEventListener('DOMContentLoaded', ()=> {
+
+      const localConfig = loadLocalStorageConfig();
+      applyStorageLimits(localConfig);
+
+      // 初始化图表
+      initializeBatteryChart();      
+      // loadBatteryHistory();
+
+      // 监听配置修改更新
+      initStorageConfigListener();
+      
+      // 电量示例
+      const level = 22;
+      const bar = document.getElementById('batteryLevelBar');
+      const txt = document.getElementById('batteryText');
+      const stat = document.getElementById('batteryStatus');
+      bar.style.width = level + '%';
+      txt.textContent = level + '%';
+      stat.classList.remove('battery-medium','battery-low');
+      if (level<=20) stat.classList.add('battery-low');
+      else if (level<=60) stat.classList.add('battery-medium');
+
+      updateSuggestions();
+    });
+
+
+
+  </script>
+</body>
+</html>

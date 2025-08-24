@@ -1,0 +1,4001 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>控制台 - Dashboard</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #ffffff;
+            color: #333333;
+            line-height: 1.6;
+        }
+
+        /* 导航栏样式 */
+        .navbar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            height: 60px;
+        }
+
+        .navbar-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            height: 100%;
+        }
+
+        .navbar-brand {
+            font-size: 24px;
+            font-weight: bold;
+            text-decoration: none;
+            color: white;
+            display: flex;
+            align-items: center;
+        }
+
+        .navbar-brand::before {
+            margin-right: 10px;
+            font-size: 28px;
+        }
+
+        .navbar-nav {
+            display: flex;
+            list-style: none;
+            gap: 30px;
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 用户信息区域 */
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            padding: 8px 12px;
+            border-radius: 8px;
+        }
+
+        .user-info:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            transition: transform 0.3s ease;
+        }
+
+        .user-info:hover .user-avatar {
+            transform: scale(1.1);
+        }
+
+        .user-name {
+            font-weight: 500;
+        }
+
+        /* 主要内容区域 */
+        .main-container {
+            margin-top: 60px;
+            min-height: calc(100vh - 60px);
+            background-color: #f8f9fa;
+        }
+
+        /* 侧边栏 */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 60px;
+            width: 250px;
+            height: calc(100vh - 60px);
+            background-color: white;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .sidebar-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+            pointer-events: none;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #e9ecef;
+            background: linear-gradient(135deg, rgba(255, 113, 101, 0.9) 0%, rgba(255, 164, 78, 0.9) 100%);
+            color: white;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sidebar-header::after {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+            animation: subtle-glow 3s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+
+        .sidebar-subtitle {
+            position: relative;
+            z-index: 2;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .sidebar-title {
+            position: relative;
+            z-index: 2;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        }
+
+        .sidebar-subtitle {
+            position: relative;
+            z-index: 2;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .sidebar-menu {
+            padding: 20px 0;
+        }
+
+        .menu-item {
+            display: block;
+            padding: 12px 20px;
+            color: #495057;
+            text-decoration: none;
+            border-left: 3px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .menu-item:hover {
+            background-color: #f8f9fa;
+            border-left-color: #667eea;
+            color: #667eea;
+        }
+
+        .menu-item.active {
+            background-color: #e3f2fd;
+            border-left-color: #2196f3;
+            color: #1976d2;
+            font-weight: 500;
+        }
+
+        .menu-item::before {
+            content: "";
+            margin-right: 10px;
+        }
+
+        /* .menu-item[data-icon="dashboard"]::before { content: "📊"; }
+        .menu-item[data-icon="analytics"]::before { content: "📈"; }
+        .menu-item[data-icon="users"]::before { content: "👥"; }
+        .menu-item[data-icon="monitoring"]::before { content: "🖥️"; } */
+
+        /* 主内容区域 */
+        .content {
+            margin-left: 250px;
+            padding: 30px;
+            min-height: calc(100vh - 60px);
+        }
+
+        .content-header {
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 32px;
+            font-weight: 300;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .page-subtitle {
+            color: #6c757d;
+            font-size: 16px;
+        }
+
+        /* 卡片样式 */
+        .dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* 3列等宽布局 */
+            gap: 25px; /* 卡片间距 */
+            margin-bottom: 30px;
+            max-width: 1200px; /* 限制最大宽度 */
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 1024px) {
+            .dashboard-cards {
+                grid-template-columns: repeat(2, 1fr); /* 中等屏幕2列 */
+                gap: 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-cards {
+                grid-template-columns: 1fr; /* 小屏幕单列 */
+                gap: 15px;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            border: 1px solid #e9ecef;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-icon {
+            font-size: 24px;
+            margin-right: 12px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .card-content {
+            color: #6c757d;
+        }
+
+        /* 监控页面特殊样式 */
+        .user-selector-container {
+            max-width: 600px;
+        }
+        
+        .user-info-card {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .user-info-card h4 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        
+        .user-info-card p {
+            margin: 5px 0;
+            color: #6c757d;
+        }
+        
+        .battery-stats-summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        .stat-label {
+            display: block;
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            display: block;
+            font-size: 24px;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .tracking-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .chart-container {
+            position: relative;
+            width: 100%;
+        }
+        
+        /* 状态徽章样式 */
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-badge.active {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-badge.inactive {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .battery-stats-summary,
+            .tracking-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* 数据分析样式 */
+        .battery-analysis-summary,
+        .path-analysis-summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .analysis-stat-item {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+
+        .analysis-stat-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .analysis-stat-item .stat-label {
+            display: block;
+            font-size: 14px;
+            color: #6c757d;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .analysis-stat-item .stat-value {
+            display: block;
+            font-size: 28px;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .stat-trend {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .trend-up { background-color: #d4edda; color: #155724; }
+        .trend-down { background-color: #f8d7da; color: #721c24; }
+        .trend-stable { background-color: #fff3cd; color: #856404; }
+
+        /* 建议卡片样式 */
+        .recommendations-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 15px;
+        }
+
+        .recommendation-card {
+            display: flex;
+            align-items: flex-start;
+            padding: 20px;
+            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .recommendation-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.15);
+        }
+
+        .recommendation-icon {
+            font-size: 24px;
+            margin-right: 15px;
+            margin-top: 3px;
+        }
+
+        .recommendation-content h5 {
+            margin: 0 0 8px 0;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+
+        .recommendation-content p {
+            margin: 0;
+            color: #6c757d;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* 地图控制样式 */
+        .map-controls {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .map-controls label {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            color: #495057;
+            cursor: pointer;
+        }
+
+        .map-controls input[type="checkbox"] {
+            margin-right: 8px;
+        }
+
+        /* 模式分析样式 */
+        .patterns-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .pattern-card {
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+
+        .pattern-card h5 {
+            margin: 0 0 12px 0;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+
+        .pattern-card div {
+            color: #6c757d;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        /* 评估报告样式 */
+        .evaluation-report {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        .report-section h4 {
+            margin: 0 0 20px 0;
+            color: #2c3e50;
+            font-size: 18px;
+        }
+
+        .score-display {
+            display: flex;
+            align-items: center;
+            gap: 30px;
+        }
+
+        .score-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .score-value {
+            font-size: 32px;
+            line-height: 1;
+        }
+
+        .score-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .score-breakdown {
+            flex: 1;
+        }
+
+        .score-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 15px;
+        }
+
+        .score-name {
+            min-width: 80px;
+            font-size: 14px;
+            color: #495057;
+        }
+
+        .score-bar {
+            flex: 1;
+            height: 8px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .score-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.8s ease;
+        }
+
+        .score-number {
+            min-width: 30px;
+            text-align: right;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .evaluation-text {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            line-height: 1.6;
+            color: #495057;
+            border-left: 4px solid #667eea;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 1200px) {
+            .battery-analysis-summary,
+            .path-analysis-summary {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .evaluation-report {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .battery-analysis-summary,
+            .path-analysis-summary,
+            .recommendations-grid,
+            .patterns-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .score-display {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+
+        /* 用户管理样式 */
+        .role-badge {
+            display: inline-block;
+        }
+        .role-admin { background-color: #f8d7da; color: #c82333;}
+        .role-user { background-color: #8699a3bf; color: #ddfff9;}
+
+        .status-btn {
+            transition: all 0.3s ease;
+        }
+        .status-active { background-color: #3b9c95; color: #fff;}
+        .status-inactive { background-color: #b0bec5; color: #fff;}
+        .status-btn:hover { opacity: 0.85; }
+
+        .btn-sm {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .btn-danger {
+            background-color: #f8d7da;
+            color: #c82333;
+            margin-right: 5px;
+        }
+        .btn-info {
+            background-color: #e2f0fb;
+            color: #117a8b;
+        }
+        .btn-sm:hover { opacity: 0.85; }
+
+        .user-list-item:hover {
+            box-shadow: 0 2px 8px rgba(102,126,234,0.08);
+            transform: translateY(-2px) scale(1.01);
+            transition: all 0.3s ease;
+        }
+
+        /* 管理员页面样式 */
+        .admin-panel {
+            display: none;
+        }
+
+        .admin-panel.active {
+            display: block;
+        }
+
+        .admin-form {
+            max-width: 600px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background-color: #fff;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+            margin-right: 10px;
+        }
+
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        .avatar-preview {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 10px 0;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 24px;
+        }
+
+        .device-counter {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .counter-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 6px;
+            background-color: #667eea;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .counter-btn:hover {
+            background-color: #5a67d8;
+            transform: scale(1.1);
+        }
+
+        .counter-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+            min-width: 60px;
+            text-align: center;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .content {
+                margin-left: 0;
+                padding: 20px;
+            }
+
+            .navbar-nav {
+                display: none;
+            }
+
+            .mobile-menu-btn {
+                display: block;
+                background: none;
+                border: none;
+                color: white;
+                font-size: 24px;
+                cursor: pointer;
+            }
+        }
+
+        .mobile-menu-btn {
+            display: none;
+        }
+
+        /* 加载动画 */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 状态指示器 */
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-online { background-color: #28a745; }
+        .status-offline { background-color: #dc3545; }
+        .status-warning { background-color: #ffc107; }
+
+        /* 隐藏类 */
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="navbar-container">
+            <a href="#" class="navbar-brand">控制台</a>
+            
+            <ul class="navbar-nav">
+                <li class="nav-item">
+                    <a href="#" class="nav-link active" data-page="dashboard">概览</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-page="monitoring">监控</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-page="analytics">分析</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link" data-page="users">用户</a>
+                </li>
+            </ul>
+
+            <div class="user-info" onclick="showAdminPanel()">
+                <span class="user-name" id="displayUserName">管理员</span>
+                <div class="user-avatar" id="displayUserAvatar">A</div>
+            </div>
+
+            <button class="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        <!-- 侧边栏 -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">控制面板</div>
+                <div class="sidebar-subtitle">系统管理中心</div>
+            </div>
+            
+            <nav class="sidebar-menu">
+                <a href="#" class="menu-item active" data-icon="dashboard" data-page="dashboard">仪表板</a>
+                <a href="#" class="menu-item" data-icon="monitoring" data-page="monitoring">系统监控</a>
+                <a href="#" class="menu-item" data-icon="analytics" data-page="analytics">数据分析</a>
+                <a href="#" class="menu-item" data-icon="users" data-page="users">用户管理</a>
+            </nav>
+        </aside>
+
+        <!-- 主内容区域 -->
+        <main class="content">
+            <!-- 仪表板页面 -->
+            <div id="dashboard-page" class="page-content">
+                <div class="content-header">
+                    <h1 class="page-title">欢迎来到控制台</h1>
+                    <p class="page-subtitle">这里是您的系统管理中心，可以监控和管理所有功能模块</p>
+                </div>
+
+                <!-- 仪表板卡片 -->
+                <div class="dashboard-cards">
+
+                    <div class="card">
+                        <div class="card-header">
+                            <!-- <span class="card-icon">📈</span> -->
+                            <h3 class="card-title">设备监控</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>实时监控接入设备的性能和使用情况</p>
+                            <div style="margin-top: 15px;">
+                                <span class="status-indicator status-online"></span>
+                                <small>设备正常接入使用</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <!-- <span class="card-icon">🔧</span> -->
+                            <h3 class="card-title">数据分析</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>分析接入设备的使用情况和性能数据</p>
+                            <div style="margin-top: 15px;">
+                                <span class="status-indicator status-online"></span>
+                                <small>设备数据可用</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header">
+                            <!-- <span class="card-icon">🔐</span> -->
+                            <h3 class="card-title">设备管理</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>管理可接入的设备数量和连接状态</p>
+                            <div style="margin-top: 15px;">
+                                <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #6c757d; font-size: 14px;">当前接入设备:</span>
+                                        <span style="font-weight: 600; color: #2c3e50;" id="currentConnectedDevices">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #6c757d; font-size: 14px;">启用设备:</span>
+                                        <span style="font-weight: 600; color: #28a745;" id="activeDeviceCount">0</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <span style="color: #6c757d; font-size: 14px;">最大容量:</span>
+                                        <span style="font-weight: 600; color: #667eea;" id="deviceCountDisplay">5</span>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 12px;">
+                                    <span class="status-indicator" id="deviceStatusIndicator"></span>
+                                    <small id="deviceStatusText">设备状态正常</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                 <div class="card">
+                    <div class="card-header">
+                        <!-- <span class="card-icon">📋</span> -->
+                        <h3 class="card-title">系统状态</h3>
+                    </div>
+                    <div class="card-content">
+                        <p>当前系统运行状态良好，所有模块正常工作。</p>
+                        <br>
+                        <p>设备信息：</p>
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>当前接入设备数量: <span id="registeredUserCount">0</span> 人</li>
+                            <li>启用设备数量: <span id="onlineDeviceCount">0</span> 台</li>
+                            <li>最大可接入设备: <span id="maxDeviceCount">5</span> 台</li>
+                            <li>设备使用率: <span id="deviceUsageRate">0%</span></li>
+                        </ul>
+                        
+                        <!-- 设备使用率进度条 -->
+                        <div style="margin-top: 15px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <span style="font-size: 14px; color: #6c757d;">设备容量使用情况</span>
+                                <span style="font-size: 12px; color: #6c757d;" id="capacityRatio">0/5</span>
+                            </div>
+                            <div style="background-color: #e9ecef; border-radius: 6px; height: 12px; overflow: hidden;">
+                                <div id="dashboardUsageBar" style="height: 100%; width: 0%; background-color: #28a745; border-radius: 6px; transition: all 0.3s ease;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 管理员设置页面 -->
+            <div id="admin-page" class="page-content admin-panel">
+                <div class="content-header">
+                    <h1 class="page-title">管理员设置</h1>
+                    <p class="page-subtitle">配置管理员信息和系统参数</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">个人信息设置</h3>
+                    </div>
+                    <div class="card-content">
+                        <form class="admin-form" id="adminForm">
+                            <div class="form-group">
+                                <label class="form-label" for="adminName">管理员名称</label>
+                                <input type="text" class="form-input" id="adminName" placeholder="请输入管理员名称" value="管理员">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="adminAvatar">头像字母</label>
+                                <input type="text" class="form-input" id="adminAvatar" placeholder="请输入头像显示字母" maxlength="2" value="A">
+                                <div class="avatar-preview" id="avatarPreview">A</div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="adminBio">个人简介</label>
+                                <textarea class="form-input form-textarea" id="adminBio" placeholder="请输入个人简介">系统管理员，负责整体系统运维和管理工作。</textarea>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 在设备接入设置卡片中添加存储设置 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">设备接入设置</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="form-group">
+                            <label class="form-label">最大可接入设备数量</label>
+                            <div class="device-counter">
+                                <button type="button" class="counter-btn" onclick="changeDeviceCount(-1)">-</button>
+                                <span class="counter-display" id="deviceCount">5</span>
+                                <button type="button" class="counter-btn" onclick="changeDeviceCount(1)">+</button>
+                            </div>
+                            <small style="color: #9dd1ff; margin-top: 8px; display: block;">
+                                设备数量范围: 1-20台
+                            </small>
+                        </div>
+
+                        <!-- 新增：存储数据上限设置 -->
+                        <div class="form-group" style="margin-top: 30px;">
+                            <label class="form-label">本地存储数据上限</label>
+                            <div class="device-counter">
+                                <button type="button" class="counter-btn" onclick="changeStorageLimit(-1)">-</button>
+                                <span class="counter-display" id="storageLimit">30</span>
+                                <button type="button" class="counter-btn" onclick="changeStorageLimit(1)">+</button>
+                            </div>
+                            <small style="color: #9dd1ff; margin-top: 8px; display: block;">
+                                数据条数范围: 500-5000条 (影响电池数据和位置数据存储)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">保存设置</h3>
+                    </div>
+                    <div class="card-content">
+                        <button type="button" class="btn btn-primary" onclick="saveAdminSettings()">保存所有设置</button>
+                        <button type="button" class="btn btn-secondary" onclick="resetAdminSettings()">重置为默认</button>
+                        <button type="button" class="btn btn-secondary" onclick="backToDashboard()">返回仪表板</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 其他页面内容（占位） -->
+            <div id="analytics-page" class="page-content hidden">
+                <div class="content-header">
+                    <h1 class="page-title">数据分析</h1>
+                    <p class="page-subtitle">深度分析用户设备使用情况和骑行模式</p>
+                </div>
+
+                <!-- 用户选择器 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">👤</span>
+                        <h3 class="card-title">用户选择</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="user-selector-container">
+                            <label class="form-label" for="analyticsUserSelect">选择要分析的用户：</label>
+                            <select class="form-input" id="analyticsUserSelect" onchange="switchAnalyticsUser()" style="max-width: 300px;">
+                                <option value="">请选择用户</option>
+                            </select>
+                            <div class="selected-user-info" id="analyticsSelectedUserInfo" style="margin-top: 15px; display: none;">
+                                <div class="user-info-card">
+                                    <h4 id="analyticsCurrentUserName">用户名称</h4>
+                                    <p><strong>角色：</strong><span id="analyticsCurrentUserRole">普通用户</span></p>
+                                    <p><strong>设备编号：</strong><span id="analyticsCurrentUserDevice">未分配</span></p>
+                                    <p><strong>分析周期：</strong><span id="analyticsDateRange">最近7天</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 分析数据容器 -->
+                <div id="analyticsDataContainer" style="display: none;">
+                    <!-- 电池使用分析 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-icon">🔋</span>
+                            <h3 class="card-title">电池使用分析</h3>
+                            <div style="margin-left: auto;">
+                                <button class="btn btn-secondary" onclick="refreshAnalyticsData()" style="padding: 8px 16px; font-size: 12px;">
+                                    <span id="analyticsRefreshIcon">🔄</span> 刷新分析
+                                </button>
+                                <button class="btn btn-secondary" onclick="exportAnalyticsReport()" style="padding: 8px 16px; font-size: 12px; margin-left: 8px;">
+                                    📊 导出报告
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <!-- 电池统计概览 -->
+                            <div class="battery-analysis-summary">
+                                <div class="analysis-stat-item">
+                                    <span class="stat-label">平均电压</span>
+                                    <span class="stat-value" id="avgVoltage">--V</span>
+                                    <span class="stat-trend" id="voltageTrend"></span>
+                                </div>
+                                <div class="analysis-stat-item">
+                                    <span class="stat-label">平均电流</span>
+                                    <span class="stat-value" id="avgCurrent">--A</span>
+                                    <span class="stat-trend" id="currentTrend"></span>
+                                </div>
+                                <div class="analysis-stat-item">
+                                    <span class="stat-label">电池健康度</span>
+                                    <span class="stat-value" id="batteryHealth">--</span>
+                                    <span class="stat-trend" id="healthTrend"></span>
+                                </div>
+                                <div class="analysis-stat-item">
+                                    <span class="stat-label">使用效率</span>
+                                    <span class="stat-value" id="efficiency">--%</span>
+                                    <span class="stat-trend" id="efficiencyTrend"></span>
+                                </div>
+                            </div>
+
+                            <!-- 电池趋势图表 -->
+                            <div class="chart-container" style="position: relative; height: 300px; margin: 20px 0;">
+                                <canvas id="batteryTrendChart"></canvas>
+                            </div>
+
+                            <!-- 电池建议卡片 -->
+                            <div class="recommendations-section">
+                                <h4 style="margin-bottom: 15px; color: #2c3e50;">💡 使用建议</h4>
+                                <div class="recommendations-grid">
+                                    <div class="recommendation-card" id="chargingRecommendation">
+                                        <div class="recommendation-icon">⚡</div>
+                                        <div class="recommendation-content">
+                                            <h5>充电建议</h5>
+                                            <p id="chargingAdvice">分析中...</p>
+                                        </div>
+                                    </div>
+                                    <div class="recommendation-card" id="usageRecommendation">
+                                        <div class="recommendation-icon">🔋</div>
+                                        <div class="recommendation-content">
+                                            <h5>使用建议</h5>
+                                            <p id="usageAdvice">分析中...</p>
+                                        </div>
+                                    </div>
+                                    <div class="recommendation-card" id="maintenanceRecommendation">
+                                        <div class="recommendation-icon">🔧</div>
+                                        <div class="recommendation-content">
+                                            <h5>维护建议</h5>
+                                            <p id="maintenanceAdvice">分析中...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 骑行路径分析 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-icon">🗺️</span>
+                            <h3 class="card-title">骑行路径分析</h3>
+                            <div style="margin-left: auto;">
+                                <select id="pathAnalysisPeriod" class="form-input" onchange="updatePathAnalysis()" style="width: 120px; padding: 6px 10px;">
+                                    <option value="7">最近7天</option>
+                                    <option value="14">最近14天</option>
+                                    <option value="30">最近30天</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <!-- 路径统计概览 -->
+                            <div class="path-analysis-summary">
+                                <div class="analysis-stat-item">
+                                    <span class="stat-label">总骑行距离</span>
+                                    <span class="stat-value" id="totalDistance">-- km</span>
+                                </div>
+                                <div class="analysis-stat-item">
+                                    <span class="stat-label">活动天数</span>
+                                    <span class="stat-value" id="activeDays">-- 天</span>
+                                </div>
+                                <div class="analysis-stat-item">
+                                    <span class="stat-label">平均日距离</span>
+                                    <span class="stat-value" id="avgDailyDistance">-- km</span>
+                                </div>
+                                <div class="analysis-stat-item">
+                                    <span class="stat-label">覆盖范围</span>
+                                    <span class="stat-value" id="coverageArea">-- km²</span>
+                                </div>
+                            </div>
+
+                            <!-- 路径覆盖地图 -->
+                            <div class="map-analysis-container">
+                                <div id="pathAnalysisMap" style="height: 400px; border-radius: 8px; overflow: hidden; margin: 20px 0;"></div>
+                                
+                                <!-- 路径热力图控制 -->
+                                <div class="map-controls">
+                                    <label>
+                                        <input type="checkbox" id="showHeatmap" onchange="toggleHeatmap()" checked>
+                                        显示活动热力图
+                                    </label>
+                                    <label style="margin-left: 20px;">
+                                        <input type="checkbox" id="showCoverage" onchange="toggleCoverage()" checked>
+                                        显示覆盖区域
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- 路径模式分析 -->
+                            <div class="path-patterns-section">
+                                <h4 style="margin: 20px 0 15px 0; color: #2c3e50;">📈 路径模式分析</h4>
+                                <div class="patterns-grid">
+                                    <div class="pattern-card">
+                                        <h5>📍 常用区域</h5>
+                                        <div id="frequentAreas">分析中...</div>
+                                    </div>
+                                    <div class="pattern-card">
+                                        <h5>🕒 活动时段</h5>
+                                        <div id="activeTimePatterns">分析中...</div>
+                                    </div>
+                                    <div class="pattern-card">
+                                        <h5>📊 骑行习惯</h5>
+                                        <div id="ridingHabits">分析中...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 综合评估报告 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <span class="card-icon">📋</span>
+                            <h3 class="card-title">综合评估报告</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="evaluation-report">
+                                <div class="report-section">
+                                    <h4>🎯 使用评分</h4>
+                                    <div class="score-display">
+                                        <div class="score-circle" id="overallScore">
+                                            <span class="score-value">--</span>
+                                            <span class="score-label">总分</span>
+                                        </div>
+                                        <div class="score-breakdown">
+                                            <div class="score-item">
+                                                <span class="score-name">电池管理</span>
+                                                <div class="score-bar">
+                                                    <div class="score-fill" id="batteryScore" style="width: 0%"></div>
+                                                </div>
+                                                <span class="score-number" id="batteryScoreNum">0</span>
+                                            </div>
+                                            <div class="score-item">
+                                                <span class="score-name">骑行频率</span>
+                                                <div class="score-bar">
+                                                    <div class="score-fill" id="frequencyScore" style="width: 0%"></div>
+                                                </div>
+                                                <span class="score-number" id="frequencyScoreNum">0</span>
+                                            </div>
+                                            <div class="score-item">
+                                                <span class="score-name">路径效率</span>
+                                                <div class="score-bar">
+                                                    <div class="score-fill" id="pathScore" style="width: 0%"></div>
+                                                </div>
+                                                <span class="score-number" id="pathScoreNum">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="report-section">
+                                    <h4>📝 总结与建议</h4>
+                                    <div id="evaluationSummary" class="evaluation-text">
+                                        正在生成综合评估报告...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 无数据提示 -->
+                <div id="analyticsNoDataMessage" class="card" style="display: none;">
+                    <div class="card-content" style="text-align: center; padding: 40px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+                        <h4>暂无分析数据</h4>
+                        <p style="color: #6c757d;">请先选择一个用户进行数据分析</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- monitoring页面内容 -->
+            <div id="monitoring-page" class="page-content hidden">
+                <div class="content-header">
+                    <h1 class="page-title">系统监控</h1>
+                    <p class="page-subtitle">实时监控用户设备状态和轨迹信息</p>
+                </div>
+
+                <!-- 用户选择器 -->
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-icon">👤</span>
+                        <h3 class="card-title">用户选择</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="user-selector-container">
+                            <label class="form-label" for="monitoringUserSelect">选择要监控的用户：</label>
+                            <select class="form-input" id="monitoringUserSelect" onchange="switchMonitoringUser()" style="max-width: 300px;">
+                                <option value="">请选择用户</option>
+                            </select>
+                            <div class="selected-user-info" id="selectedUserInfo" style="margin-top: 15px; display: none;">
+                                <div class="user-info-card">
+                                    <h4 id="currentUserName">用户名称</h4>
+                                    <p><strong>角色：</strong><span id="currentUserRole">普通用户</span></p>
+                                    <p><strong>设备编号：</strong><span id="currentUserDevice">未分配</span></p>
+                                    <p><strong>状态：</strong><span id="currentUserStatus" class="status-badge">启用</span></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 监控数据容器 -->
+                <div id="monitoringDataContainer" style="display: none;">
+                    <!-- 电池监控图表 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">电池监控数据</h3>
+                            <div style="margin-left: auto;">
+                                <button class="btn btn-secondary" onclick="refreshBatteryData()" style="padding: 8px 16px; font-size: 12px;">
+                                    <span id="batteryRefreshIcon"></span> 刷新数据
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="battery-stats-summary">
+                                <div class="stat-item">
+                                    <span class="stat-label">当前电压</span>
+                                    <span class="stat-value" id="currentVoltage">--V</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">当前电流</span>
+                                    <span class="stat-value" id="currentCurrent">--A</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">数据点数</span>
+                                    <span class="stat-value" id="dataPointCount">0</span>
+                                </div>
+                            </div>
+                            <div class="chart-container" style="position: relative; height: 400px; margin-top: 20px;">
+                                <canvas id="monitoringBatteryChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 轨迹监控地图 -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">轨迹监控</h3>
+                            <div style="margin-left: auto;">
+                                <label for="dateSelector" style="margin-right: 10px; font-weight: 500;">选择日期：</label>
+                                <select id="dateSelector" class="form-input" onchange="switchTrackingDate()" style="width: 150px; padding: 6px 10px;">
+                                    <option value="">选择日期</option>
+                                </select>
+                                <button class="btn btn-secondary" onclick="refreshMapData()" style="padding: 8px 16px; font-size: 12px; margin-left: 10px;">
+                                    <span id="mapRefreshIcon"></span> 刷新地图
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-content">
+                            <div class="tracking-stats" id="trackingStats" style="margin-bottom: 15px; display: none;">
+                                <div class="stat-item">
+                                    <span class="stat-label">轨迹点数</span>
+                                    <span class="stat-value" id="trackPointCount">0</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">总距离</span>
+                                    <span class="stat-value" id="totalDistance">0 km</span>
+                                </div>
+                                <div class="stat-item">
+                                    <span class="stat-label">活动时间</span>
+                                    <span class="stat-value" id="activityTime">--</span>
+                                </div>
+                            </div>
+                            <div id="monitoringMap" style="height: 500px; border-radius: 8px; overflow: hidden;"></div>
+                            <div id="mapLoadingIndicator" style="display: none; text-align: center; padding: 20px; color: #6c757d;">
+                                <div class="loading-spinner" style="margin: 0 auto 10px;"></div>
+                                <p>正在加载地图数据...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 无数据提示 -->
+                <div id="noDataMessage" class="card" style="display: none;">
+                    <div class="card-content" style="text-align: center; padding: 40px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📊</div>
+                        <h4>暂无监控数据</h4>
+                        <p style="color: #6c757d;">请先选择一个用户查看其监控数据</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 用户管理页面 -->
+            <div id="users-page" class="page-content hidden">
+                <div class="content-header">
+                    <h1 class="page-title">用户管理</h1>
+                    <p class="page-subtitle">管理系统用户和设备接入</p>
+                </div>
+
+                <!-- 用户统计卡片 -->
+                <div class="dashboard-cards">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">用户统计</h3>
+                        </div>
+                        <div class="card-content">
+                            <p>当前已注册用户: <strong id="currentUserCount">0</strong> 人</p>
+                            <p>最大可接入设备: <strong id="maxUserDevices">5</strong> 台</p>
+                            <div style="margin-top: 15px;">
+                                <span class="status-indicator" id="userStatusIndicator"></span>
+                                <small id="userStatusText">系统正常</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 用户录入表单 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">添加新用户</h3>
+                    </div>
+                    <div class="card-content">
+                        <form class="admin-form" id="addUserForm" style="max-width: 500px;">
+                            <div class="form-group">
+                                <label class="form-label" for="newUserName">用户姓名</label>
+                                <input type="text" class="form-input" id="newUserName" placeholder="请输入用户姓名" maxlength="20">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="newUserRole">用户角色</label>
+                                <select class="form-input" id="newUserRole">
+                                    <option value="user">普通用户</option>
+                                    <option value="admin">管理员</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="newUserDevice">设备编号</label>
+                                <input type="text" class="form-input" id="newUserDevice" placeholder="请输入设备编号（可选）" maxlength="20">
+                            </div>
+
+                            <div class="form-group">
+                                <button type="button" class="btn btn-primary" onclick="addNewUser()">
+                                    <span id="addUserBtnText">添加用户</span>
+                                </button>             
+                                <span id="addUserSpinner" class="loading-spinner hidden" style="margin-left: 10px;"></span>
+                                <button type="button" class="btn btn-secondary" onclick="clearUserForm()">清空表单</button>
+                            </div>
+
+                            <!-- 容量警告 -->
+                            <div id="capacityWarning" class="hidden" style="background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 6px; padding: 12px; margin-top: 15px; color: #856404;">
+                                <strong>容量警告:</strong> 
+                                <span id="warningMessage">当前用户数量已接近上限</span>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- 用户列表 -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">已注册用户列表</h3>
+                        <div style="margin-left: auto;">
+                            <button class="btn btn-secondary" onclick="refreshUserList()" style="padding: 8px 16px; font-size: 12px; background-color: rgba(108,117,125,0.85); color: white; backdrop-filter: blur(10px);">
+                                刷新
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-content">
+                        <!-- 搜索过滤器 -->
+                        <div class="form-group" style="margin-bottom: 20px;"></div>
+                            <input type="text" class="form-input" id="userSearchInput" placeholder="搜索用户姓名或设备编号..." style="max-width: 300px;" oninput="filterUserList()">
+                        </div>
+
+                        <!-- 用户列表容器 -->
+                        <div id="userListContainer">
+                            <!-- <div id="emptyUserState" class="text-center" style="color: #6c757d; padding: 40px;"></div>
+                                <div style="font-size: 48px; margin-bottom: 16px;">👤</div>
+                                <h4>暂无用户数据</h4>
+                                <p>请添加第一个用户开始使用系统</p>
+                            </div> -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+        </main>
+    </div>
+
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // 全局变量
+        let adminSettings = {
+            name: '管理员',
+            avatar: 'A',
+            bio: '系统管理员，负责整体系统运维和管理工作。',
+            maxDevices: 5,
+            storageLimit: 30  // 新增：存储数据上限
+        };
+
+        // 监控页面全局变量
+        let monitoringBatteryChart = null;
+        let monitoringMap = null;
+        let currentMonitoringUser = null;
+        let currentTrackingDate = null;
+        let trackingLayer = null;
+        let userDataMapping = {};   // 模拟用户数据映射 - 为每个用户分配独立的数据
+
+        // 数据分析部分
+        let analyticsMap = null;
+        let currentAnalyticsUser = null;
+        let batteryTrendChart = null;
+        let heatmapLayer = null;
+        let coverageLayer = null;
+
+        // 用户管理全局变量
+        let userList = [];
+        let filteredUserList = [];
+
+        /* ---------- 仪表盘设置（导航仪） ---------- */
+
+        /* ---------- 主页面仪表盘卡片 以及页面控制函数 ---------- */
+        // 切换侧边栏显示/隐藏（移动端）
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('show');
+        }
+
+        // 显示管理员面板
+        function showAdminPanel() {
+            showPage('admin');
+        }
+
+        // 返回仪表板
+        function backToDashboard() {
+            showPage('dashboard');
+        }
+
+        // 页面切换函数
+        function showPage(pageId) {
+            // 隐藏所有页面
+            document.querySelectorAll('.page-content').forEach(page => {
+                page.classList.add('hidden');
+                page.classList.remove('active');
+            });
+
+            // 显示指定页面
+            const targetPage = document.getElementById(pageId + '-page');
+            if (targetPage) {
+                targetPage.classList.remove('hidden');
+                targetPage.classList.add('active');
+            }
+
+            // 更新菜单状态
+            updateMenuState(pageId);
+        }
+
+        // 更新菜单状态
+        function updateMenuState(activePageId) {
+            // 更新侧边栏菜单
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.page === activePageId) {
+                    item.classList.add('active');
+                }
+            });
+
+            // 更新顶部导航
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+                if (link.dataset.page === activePageId) {
+                    link.classList.add('active');
+                }
+            });
+        }
+
+        // 更新仪表板设备统计显示
+        function updateDashboardDeviceStats() {
+            const totalUsers = userList.length;
+            const activeUsers = userList.filter(u => u.status === 'active').length;
+            const maxDevices = adminSettings.maxDevices;
+            const usagePercent = Math.round((totalUsers / maxDevices) * 100);
+
+            // 更新设备管理卡片
+            const currentConnectedElement = document.getElementById('currentConnectedDevices');
+            const activeDeviceElement = document.getElementById('activeDeviceCount');
+            const deviceStatusIndicator = document.getElementById('deviceStatusIndicator');
+            const deviceStatusText = document.getElementById('deviceStatusText');
+
+            if (currentConnectedElement) currentConnectedElement.textContent = totalUsers;
+            if (activeDeviceElement) activeDeviceElement.textContent = activeUsers;
+
+            // 更新设备状态指示器
+            if (deviceStatusIndicator && deviceStatusText) {
+                if (usagePercent >= 90) {
+                    deviceStatusIndicator.className = 'status-indicator status-offline';
+                    deviceStatusText.textContent = '设备容量即将满载';
+                } else if (usagePercent >= 70) {
+                    deviceStatusIndicator.className = 'status-indicator status-warning';
+                    deviceStatusText.textContent = '设备使用率较高';
+                } else {
+                    deviceStatusIndicator.className = 'status-indicator status-online';
+                    deviceStatusText.textContent = '设备状态正常';
+                }
+            }
+
+            // 更新系统状态卡片
+            const onlineDeviceCount = document.getElementById('onlineDeviceCount');
+            const registeredUserCount = document.getElementById('registeredUserCount');
+            const maxDeviceCount = document.getElementById('maxDeviceCount');
+            const deviceUsageRate = document.getElementById('deviceUsageRate');
+            const capacityRatio = document.getElementById('capacityRatio');
+            const dashboardUsageBar = document.getElementById('dashboardUsageBar');
+
+            if (onlineDeviceCount) onlineDeviceCount.textContent = activeUsers;
+            if (registeredUserCount) registeredUserCount.textContent = totalUsers;
+            if (maxDeviceCount) maxDeviceCount.textContent = maxDevices;
+            if (deviceUsageRate) deviceUsageRate.textContent = usagePercent + '%';
+            if (capacityRatio) capacityRatio.textContent = `${totalUsers}/${maxDevices}`;
+
+            // 更新使用率进度条
+            if (dashboardUsageBar) {
+                dashboardUsageBar.style.width = usagePercent + '%';
+                
+                // 根据使用率设置进度条颜色
+                if (usagePercent >= 90) {
+                    dashboardUsageBar.style.backgroundColor = '#dc3545'; // 红色
+                } else if (usagePercent >= 70) {
+                    dashboardUsageBar.style.backgroundColor = '#ffc107'; // 黄色
+                } else {
+                    dashboardUsageBar.style.backgroundColor = '#28a745'; // 绿色
+                }
+            }
+
+            // 更新设备计数显示
+            const deviceCountDisplay = document.getElementById('deviceCountDisplay');
+            if (deviceCountDisplay) {
+                deviceCountDisplay.textContent = maxDevices;
+            }
+
+            console.log(`📊 仪表板设备统计已更新: ${totalUsers}/${maxDevices} (${usagePercent}%)`);
+        }
+
+        // 数组打乱函数（Fisher-Yates洗牌算法）
+        function shuffleArray(array) {
+            const shuffled = [...array]; // 创建副本
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // 获取用户在列表中的序号（用于判断是否为第一个用户）
+        function getUserIndex(userId) {
+            return userList.findIndex(user => user.id === userId);
+        }
+
+        // 检查是否为第一个用户的辅助函数
+        function isFirstUser(userId) {
+            if (userList.length === 0) return false;
+            return userList[0].id === userId;
+        }
+
+
+        /* ---------- 监控数据页面功能 ---------- */
+        // 初始化监控页面
+        function initializeMonitoringPage() {
+            loadUserSelector();
+            setupMonitoringComponents();
+        }
+
+        // 加载用户选择器
+        function loadUserSelector() {
+            const selector = document.getElementById('monitoringUserSelect');
+            
+            // 清空现有选项
+            selector.innerHTML = '<option value="">请选择用户</option>';
+            
+            // 添加已录入的用户
+            userList.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = `${user.name} (${user.device || '无设备'})`;
+                selector.appendChild(option);
+            });
+            
+            console.log('📋 用户选择器已更新，共', userList.length, '个用户');
+        }
+
+        // 切换监控用户
+        function switchMonitoringUser() {
+            const selector = document.getElementById('monitoringUserSelect');
+            const userId = selector.value;
+            
+            if (!userId) {
+                hideMonitoringData();
+                return;
+            }
+            
+            const user = userList.find(u => u.id === userId);
+            if (!user) {
+                console.error('❌ 用户未找到:', userId);
+                return;
+            }
+            
+            currentMonitoringUser = user;
+            displayUserInfo(user);
+            loadUserMonitoringData(user);
+            showMonitoringData();
+            
+            console.log('👤 切换到用户:', user.name);
+        }
+
+        // 显示用户信息
+        function displayUserInfo(user) {
+            document.getElementById('currentUserName').textContent = user.name;
+            document.getElementById('currentUserRole').textContent = getRoleDisplayName(user.role);
+            document.getElementById('currentUserDevice').textContent = user.device || '未分配';
+            
+            const statusElement = document.getElementById('currentUserStatus');
+            statusElement.textContent = user.status === 'active' ? '启用' : '禁用';
+            statusElement.className = `status-badge ${user.status}`;
+            
+            document.getElementById('selectedUserInfo').style.display = 'block';
+        }
+
+        // 加载用户监控数据
+        function loadUserMonitoringData(user) {
+            // 为用户分配或获取现有数据
+            if (!userDataMapping[user.id]) {
+                // 检查当前用户是否是第一个用户
+                const isFirstUser = userList.length > 0 && userList[0].id === user.id;
+                
+                let batteryData = generateUserBatteryData(user);
+                let trackingData = generateUserTrackingData(user);
+                
+                // 如果不是第一个用户，打乱数据顺序
+                if (!isFirstUser) {
+                    batteryData = shuffleArray([...batteryData]); // 创建副本并打乱
+                    trackingData = shuffleTrackingData(trackingData); // 打乱轨迹数据
+                    console.log(`🔀 用户 ${user.name} 的数据已打乱顺序`);
+                } else {
+                    console.log(`📊 用户 ${user.name} 是第一个用户，保持原始数据顺序`);
+                }
+                
+                userDataMapping[user.id] = {
+                    batteryData: batteryData,
+                    trackingData: trackingData
+                };
+                console.log('🔋 为用户生成监控数据:', user.name);
+            }
+
+            // 加载电池数据
+            loadBatteryChart(userDataMapping[user.id].batteryData);
+            
+            // 加载轨迹数据选择器
+            loadDateSelector(userDataMapping[user.id].trackingData);
+        }
+
+        // 轨迹数据打乱函数
+        function shuffleTrackingData(trackingData) {
+            const shuffledData = {};
+            
+            // 对每一天的数据进行处理
+            Object.keys(trackingData).forEach(date => {
+                const dayData = trackingData[date];
+                if (dayData && dayData.path && Array.isArray(dayData.path)) {
+                    // 打乱当天的路径点顺序
+                    const shuffledPath = shuffleArray([...dayData.path]);
+                    
+                    shuffledData[date] = {
+                        ...dayData,
+                        path: shuffledPath
+                    };
+                } else {
+                    // 如果没有路径数据，直接复制
+                    shuffledData[date] = { ...dayData };
+                }
+            });
+            
+            return shuffledData;
+        }
+
+        // 生成用户电池数据 (基于现有数据的模拟)
+        function generateUserBatteryData(user) {
+            try {
+                // 尝试从localStorage获取真实数据
+                const realBatteryData = localStorage.getItem('batteryHistoryData');
+                let baseData = [];
+                
+                if (realBatteryData) {
+                    const parsedData = JSON.parse(realBatteryData);
+                    
+                    // 检查数据结构是否包含voltage和current数组
+                    if (parsedData && parsedData.voltage && parsedData.current && 
+                        Array.isArray(parsedData.voltage) && Array.isArray(parsedData.current)) {
+
+                        const voltageArray = parsedData.voltage;
+                        const currentArray = parsedData.current;
+                        const dataLength = Math.min(voltageArray.length, currentArray.length);
+                        
+                        // 将数组数据转换为对象数组格式
+                        for (let i = 0; i < dataLength; i++) {
+                            baseData.push({
+                                voltage: voltageArray[i],
+                                current: currentArray[i],
+                            });
+                        }
+                        
+                        console.log(`📊 从localStorage加载了 ${dataLength} 条电池数据`);
+                    } 
+                    else {
+                        console.warn('⚠️ batteryHistoryData数据结构不正确，使用模拟数据');
+                        baseData = generateMockBatteryData(30);
+                    }
+                } 
+                else {
+                    console.log('📊 未找到localStorage中的电池数据，生成模拟数据');
+                    baseData = generateMockBatteryData(30);
+                }
+                
+                // 如果没有数据或数据不足，生成模拟数据
+                if (baseData.length === 0) {
+                    baseData = generateMockBatteryData(window.maxBatteryDataPoints);
+                }
+                
+                // 为每个用户稍微调整数据，但保持合理范围
+                const userVariation = (user.id.charCodeAt(user.id.length - 1) % 10) * 0.01 - 0.04; // 0-0.09的变化
+                
+                return baseData.map((item, index) => ({
+                    timestamp: item.timestamp || new Date(Date.now() - (baseData.length - index) * 60000).toISOString(),
+                    voltage: Math.max(7.4, Math.min(7.6, (item.voltage || 7.5) + userVariation)),
+                    current: Math.max(0.35, Math.min(0.5, (item.current || 0.4) + userVariation * 0.5))
+                }));
+                
+            } catch (error) {
+                console.error('❌ 生成用户电池数据失败:', error);
+                console.error('❌ 详细错误信息:', error.message);
+                return generateMockBatteryData(20);
+            }
+        }
+
+        // 生成用户轨迹数据 (基于现有数据的模拟)
+        function generateUserTrackingData(user) {
+            try {
+                // 尝试从localStorage获取真实数据
+                const realMockData = localStorage.getItem('mockData');
+                let baseData = {};
+                
+                if (realMockData) {
+                    const parsedData = JSON.parse(realMockData);
+                    
+                    // 处理实际的数据结构
+                    Object.keys(parsedData).forEach(date => {
+                        const dayData = parsedData[date];
+                        
+                        // 检查数据结构并转换path格式
+                        if (dayData && dayData.path && Array.isArray(dayData.path)) {
+                            // 转换path数组格式：从 [[lat, lng], [lat, lng]] 转为 [{lat, lng}, {lat, lng}]
+                            const convertedPath = dayData.path.map((point, index) => {
+                                if (Array.isArray(point) && point.length >= 2) {
+                                    return {
+                                        lat: point[0],
+                                        lng: point[1],
+                                        timestamp: new Date(Date.now() - (dayData.path.length - index) * 60000).toISOString()
+                                    };
+                                } else if (typeof point === 'object' && point.lat && point.lng) {
+                                    return {
+                                        lat: point.lat,
+                                        lng: point.lng,
+                                        timestamp: point.timestamp || new Date(Date.now() - (dayData.path.length - index) * 60000).toISOString()
+                                    };
+                                }
+                                return null;
+                            }).filter(point => point !== null);
+                            
+                            baseData[date] = {
+                                path: convertedPath,
+                                totalDistance: dayData.Distance || dayData.distance || Math.round(Math.random() * 50 + 10),
+                                numTarget: dayData.numTarget || 0,
+                                voltage: dayData.Voltage || dayData.voltage || 0,
+                                current: dayData.Current || dayData.current || 0
+                            };
+                            
+                            console.log(`📅 处理日期 ${date}:`, convertedPath.length, '个轨迹点');
+                        }
+                    });
+                }
+                
+                // 如果没有真实数据或处理后没有数据，生成模拟数据
+                if (Object.keys(baseData).length === 0) {
+                    console.log('📍 未找到有效轨迹数据，生成模拟数据');
+                    baseData = generateMockTrackingData();
+                }
+                
+                // 为每个用户调整轨迹数据（稍微偏移坐标）
+                const userOffset = {
+                    lat: ((user.id.charCodeAt(0) % 10) - 5) * 0.001, // -0.005 到 0.005
+                    lng: ((user.id.charCodeAt(1) % 10) - 5) * 0.001
+                };
+                
+                const userData = {};
+                Object.keys(baseData).forEach(date => {
+                    if (baseData[date] && baseData[date].path) {
+                        userData[date] = {
+                            ...baseData[date],
+                            path: baseData[date].path.map(point => ({
+                                lat: point.lat + userOffset.lat,
+                                lng: point.lng + userOffset.lng,
+                                timestamp: point.timestamp || new Date().toISOString()
+                            }))
+                        };
+                    }
+                });
+                
+                console.log('📊 生成用户轨迹数据完成，共', Object.keys(userData).length, '个日期');
+                return userData;
+                
+            } catch (error) {
+                console.error('❌ 生成用户轨迹数据失败:', error);
+                return generateMockTrackingData();
+            }
+        }
+
+        // 生成模拟电池数据
+        function generateMockBatteryData(count) {
+            const data = [];
+            const now = new Date();
+            
+            for (let i = 0; i < count; i++) {
+                const timestamp = new Date(now.getTime() - (count - i) * 60000);
+                data.push({
+                    timestamp: timestamp.toISOString(),
+                    voltage: 3.3 + Math.random() * 0.8, // 3.3V - 4.1V
+                    current: 0.2 + Math.random() * 0.6   // 0.2A - 0.8A
+                });
+            }
+            
+            return data;
+        }
+
+        // 生成模拟轨迹数据
+        function generateMockTrackingData() {
+            const data = {};
+            const baseLocation = { lat: 39.9042, lng: 116.4074 }; // 北京天安门
+            
+            // 生成最近7天的数据
+            for (let i = 0; i < 7; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toISOString().split('T')[0];
+                
+                const path = [];
+                for (let j = 0; j < 20; j++) {
+                    path.push({
+                        lat: baseLocation.lat + (Math.random() - 0.5) * 0.02,
+                        lng: baseLocation.lng + (Math.random() - 0.5) * 0.02,
+                        timestamp: new Date(date.getTime() + j * 60000).toISOString()
+                    });
+                }
+                
+                data[dateStr] = {
+                    path: path,
+                    totalDistance: Math.round(Math.random() * 50 + 10) // 10-60km
+                };
+            }
+            
+            return data;
+        }
+
+        // 加载电池图表
+        function loadBatteryChart(batteryData) {
+            // 销毁现有图表
+            if (monitoringBatteryChart) {
+                monitoringBatteryChart.destroy();
+                monitoringBatteryChart = null;
+            }
+            
+            const canvas = document.getElementById('monitoringBatteryChart');
+            if (!canvas) {
+                console.error('❌ 找不到电池图表画布');
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            
+            // 准备数据
+            const labels = batteryData.map(item => 
+                new Date(item.timestamp).toLocaleTimeString('zh-CN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                })
+            );
+            const voltageData = batteryData.map(item => item.voltage);
+            const currentData = batteryData.map(item => item.current);
+            
+            // 创建图表
+            monitoringBatteryChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '电压 (V)',
+                            data: voltageData,
+                            borderColor: '#4facfe',
+                            backgroundColor: 'rgba(79, 172, 254, 0.1)',
+                            fill: true,
+                            yAxisID: 'y',
+                            tension: 0.4
+                        },
+                        {
+                            label: '电流 (A)',
+                            data: currentData,
+                            borderColor: '#ff6b6b',
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                            fill: true,
+                            yAxisID: 'y1',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { color: '#333333' }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#666666' },
+                            grid: { color: 'rgba(0,0,0,0.1)' }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            ticks: { color: '#4facfe' },
+                            grid: { color: 'rgba(79,172,254,0.1)' },
+                            title: { display: true, text: '电压 (V)', color: '#4facfe' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            ticks: { color: '#ff6b6b' },
+                            grid: { drawOnChartArea: false },
+                            title: { display: true, text: '电流 (A)', color: '#ff6b6b' }
+                        }
+                    }
+                }
+            });
+            
+            // 更新统计信息
+            updateBatteryStats(batteryData);
+            
+            console.log('📊 电池监控图表已加载，数据点数:', batteryData.length);
+        }
+
+        // 更新电池统计信息
+        function updateBatteryStats(batteryData) {
+            if (batteryData.length === 0) {
+                document.getElementById('currentVoltage').textContent = '--V';
+                document.getElementById('currentCurrent').textContent = '--A';
+                document.getElementById('dataPointCount').textContent = '0';
+                return;
+            }
+            
+            const latest = batteryData[batteryData.length - 1];
+            document.getElementById('currentVoltage').textContent = latest.voltage.toFixed(2) + 'V';
+            document.getElementById('currentCurrent').textContent = latest.current.toFixed(2) + 'A';
+            document.getElementById('dataPointCount').textContent = batteryData.length;
+        }
+
+        // 加载日期选择器
+        function loadDateSelector(trackingData) {
+            const selector = document.getElementById('dateSelector');
+            
+            // 清空现有选项
+            selector.innerHTML = '<option value="">选择日期</option>';
+            
+            // 添加可用日期
+            const dates = Object.keys(trackingData).sort().reverse(); // 最新日期在前
+            dates.forEach(date => {
+                const option = document.createElement('option');
+                option.value = date;
+                option.textContent = new Date(date).toLocaleDateString('zh-CN');
+                selector.appendChild(option);
+            });
+            
+            // 默认选择最新日期
+            if (dates.length > 0) {
+                selector.value = dates[0];
+                switchTrackingDate();
+            }
+            
+            console.log('📅 日期选择器已更新，共', dates.length, '个日期');
+        }
+
+        // 切换轨迹日期
+        function switchTrackingDate() {
+            const selector = document.getElementById('dateSelector');
+            const selectedDate = selector.value;
+            
+            if (!selectedDate || !currentMonitoringUser) {
+                return;
+            }
+            
+            currentTrackingDate = selectedDate;
+            const trackingData = userDataMapping[currentMonitoringUser.id].trackingData;
+            
+            if (trackingData[selectedDate]) {
+                loadTrackingMap(trackingData[selectedDate]);
+            } else {
+                console.warn('⚠️ 选定日期无轨迹数据:', selectedDate);
+            }
+        }
+
+        // 加载轨迹地图
+        function loadTrackingMap(dayData) {
+            console.log('🗺️ 开始加载轨迹地图，数据:', dayData);
+            
+            const mapContainer = document.getElementById('monitoringMap');
+            
+            // 初始化地图（如果还没有初始化）
+            if (!monitoringMap) {
+                console.log('🗺️ 初始化地图...');
+                try {
+                    monitoringMap = L.map('monitoringMap').setView([26.7638, 106.046], 13); // 使用实际数据的中心点
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(monitoringMap);
+                    
+                    console.log('✅ 地图初始化成功');
+                } catch (error) {
+                    console.error('❌ 地图初始化失败:', error);
+                    return;
+                }
+            }
+            
+            // 清除现有轨迹
+            if (trackingLayer) {
+                monitoringMap.removeLayer(trackingLayer);
+                trackingLayer = null;
+            }
+            
+            const path = dayData.path;
+            console.log('📍 轨迹路径数据:', path);
+            
+            if (!path || path.length === 0) {
+                console.warn('⚠️ 当日无轨迹数据');
+                return;
+            }
+            
+            // 验证路径数据格式
+            const validPath = path.filter(point => 
+                point && 
+                typeof point.lat === 'number' && 
+                typeof point.lng === 'number' &&
+                !isNaN(point.lat) && 
+                !isNaN(point.lng)
+            );
+            
+            if (validPath.length === 0) {
+                console.error('❌ 没有有效的轨迹点数据');
+                return;
+            }
+            
+            console.log('✅ 有效轨迹点数:', validPath.length);
+            
+            try {
+                // 创建新的图层组
+                trackingLayer = L.layerGroup();
+                
+                // 转换路径格式
+                const latLngs = validPath.map(point => [point.lat, point.lng]);
+                console.log('📍 转换后的坐标:', latLngs);
+                
+                // 添加轨迹线
+                const polyline = L.polyline(latLngs, {
+                    color: '#667eea',
+                    weight: 4,
+                    opacity: 0.8
+                });
+                trackingLayer.addLayer(polyline);
+                
+                // 添加起点标记
+                if (validPath.length > 0) {
+                    const startMarker = L.marker([validPath[0].lat, validPath[0].lng], {
+                        icon: L.divIcon({
+                            className: 'custom-marker start-marker',
+                            html: '🚀',
+                            iconSize: [25, 25],
+                            iconAnchor: [12, 12]
+                        })
+                    }).bindPopup(`起点<br>坐标: ${validPath[0].lat.toFixed(4)}, ${validPath[0].lng.toFixed(4)}`);
+                    trackingLayer.addLayer(startMarker);
+                }
+                
+                // 添加终点标记
+                if (validPath.length > 1) {
+                    const lastPoint = validPath[validPath.length - 1];
+                    const endMarker = L.marker([lastPoint.lat, lastPoint.lng], {
+                        icon: L.divIcon({
+                            className: 'custom-marker end-marker',
+                            html: '🏁',
+                            iconSize: [25, 25],
+                            iconAnchor: [12, 12]
+                        })
+                    }).bindPopup(`终点<br>坐标: ${lastPoint.lat.toFixed(4)}, ${lastPoint.lng.toFixed(4)}`);
+                    trackingLayer.addLayer(endMarker);
+                }
+                
+                // 添加到地图
+                trackingLayer.addTo(monitoringMap);
+                
+                // 调整地图视野以适应轨迹
+                if (latLngs.length > 0) {
+                    const bounds = polyline.getBounds();
+                    monitoringMap.fitBounds(bounds, { padding: [20, 20] });
+                    console.log('🗺️ 地图视野已调整到轨迹范围');
+                }
+                
+                // 更新轨迹统计
+                updateTrackingStats(dayData);
+                
+                console.log('✅ 轨迹地图加载完成，路径点数:', validPath.length);
+                
+            } catch (error) {
+                console.error('❌ 地图加载失败:', error);
+            }
+        }
+
+        function updateTrackingStats(dayData) {
+            const path = dayData.path || [];
+            
+            document.getElementById('trackPointCount').textContent = path.length;
+            
+            // 使用实际的距离数据
+            const distance = dayData.totalDistance || dayData.Distance || dayData.distance || 0;
+            document.getElementById('totalDistance').textContent = distance + ' km';
+            
+            // 计算活动时间
+            if (path.length > 1) {
+                // 尝试解析时间戳
+                let startTime, endTime;
+                
+                if (path[0].timestamp) {
+                    startTime = new Date(path[0].timestamp);
+                } else {
+                    startTime = new Date(); // 默认当前时间
+                }
+                
+                if (path[path.length - 1].timestamp) {
+                    endTime = new Date(path[path.length - 1].timestamp);
+                } else {
+                    endTime = new Date(startTime.getTime() + path.length * 60000); // 默认每个点间隔1分钟
+                }
+                
+                const duration = Math.round((endTime - startTime) / 60000); // 分钟
+                document.getElementById('activityTime').textContent = duration > 0 ? duration + ' 分钟' : '1 分钟';
+            } else {
+                document.getElementById('activityTime').textContent = '--';
+            }
+            
+            document.getElementById('trackingStats').style.display = 'block';
+        }
+
+        // 显示监控数据
+        function showMonitoringData() {
+            document.getElementById('monitoringDataContainer').style.display = 'block';
+            document.getElementById('noDataMessage').style.display = 'none';
+        }
+
+        // 隐藏监控数据
+        function hideMonitoringData() {
+            document.getElementById('monitoringDataContainer').style.display = 'none';
+            document.getElementById('noDataMessage').style.display = 'block';
+            document.getElementById('selectedUserInfo').style.display = 'none';
+            currentMonitoringUser = null;
+            currentTrackingDate = null;
+        }
+
+        // 刷新电池数据
+        function refreshBatteryData() {
+            if (!currentMonitoringUser) return;
+            
+            const refreshIcon = document.getElementById('batteryRefreshIcon');
+            refreshIcon.style.animation = 'spin 1s linear infinite';
+            
+            setTimeout(() => {
+                // 检查是否为第一个用户
+                const isFirst = isFirstUser(currentMonitoringUser.id);
+                
+                // 重新生成数据（模拟实时更新）
+                let newBatteryData = generateUserBatteryData(currentMonitoringUser);
+                
+                // 如果不是第一个用户，打乱数据
+                if (!isFirst) {
+                    newBatteryData = shuffleArray([...newBatteryData]);
+                    console.log(`🔀 刷新时打乱了用户 ${currentMonitoringUser.name} 的电池数据`);
+                }
+                
+                userDataMapping[currentMonitoringUser.id].batteryData = newBatteryData;
+                loadBatteryChart(userDataMapping[currentMonitoringUser.id].batteryData);
+                
+                refreshIcon.style.animation = '';
+                showSuccessMessage('电池数据已刷新');
+            }, 1000);
+        }
+
+        // 刷新地图数据
+        function refreshMapData() {
+            if (!currentMonitoringUser || !currentTrackingDate) return;
+            
+            const refreshIcon = document.getElementById('mapRefreshIcon');
+            refreshIcon.style.animation = 'spin 1s linear infinite';
+            
+            setTimeout(() => {
+                const trackingData = userDataMapping[currentMonitoringUser.id].trackingData;
+                if (trackingData[currentTrackingDate]) {
+                    loadTrackingMap(trackingData[currentTrackingDate]);
+                }
+                
+                refreshIcon.style.animation = '';
+                showSuccessMessage('地图数据已刷新');
+            }, 1000);
+        }
+
+        // 设置监控组件
+        function setupMonitoringComponents() {
+            // 监听用户列表变化，更新选择器
+            const originalAddUser = addNewUser;
+            const originalDeleteUser = deleteUser;
+            
+            // 在用户添加后更新监控选择器
+            window.addNewUser = function() {
+                originalAddUser();
+                setTimeout(() => {
+                    loadUserSelector();
+                }, 100);
+            };
+            
+            // 在用户删除后更新监控选择器
+            window.deleteUser = function(userId) {
+                // 如果删除的是当前监控用户，清空监控
+                if (currentMonitoringUser && currentMonitoringUser.id === userId) {
+                    hideMonitoringData();
+                }
+                
+                // 删除用户数据映射
+                delete userDataMapping[userId];
+                
+                originalDeleteUser(userId);
+                setTimeout(() => {
+                    loadUserSelector();
+                }, 100);
+            };
+        }
+
+
+        /* ---------- 数据分析页面功能 ---------- */
+
+        // 初始化分析页面
+        function initializeAnalyticsPage() {
+            loadAnalyticsUserSelector();
+        }
+
+        // 加载用户选择器
+        function loadAnalyticsUserSelector() {
+            const selector = document.getElementById('analyticsUserSelect');
+            
+            // 清空现有选项
+            selector.innerHTML = '<option value="">请选择用户</option>';
+            
+            // 添加已录入的用户
+            userList.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.id;
+                option.textContent = `${user.name} (${user.device || '无设备'})`;
+                selector.appendChild(option);
+            });
+            
+            console.log('📋 分析用户选择器已更新，共', userList.length, '个用户');
+        }
+
+        // 切换分析用户
+        function switchAnalyticsUser() {
+            const selector = document.getElementById('analyticsUserSelect');
+            const userId = selector.value;
+            
+            if (!userId) {
+                hideAnalyticsData();
+                return;
+            }
+            
+            const user = userList.find(u => u.id === userId);
+            if (!user) {
+                console.error('❌ 分析用户未找到:', userId);
+                return;
+            }
+            
+            currentAnalyticsUser = user;
+            displayAnalyticsUserInfo(user);
+            loadUserAnalyticsData(user);
+            showAnalyticsData();
+            
+            console.log('🔍 切换到分析用户:', user.name);
+        }
+
+        // 显示分析用户信息
+        function displayAnalyticsUserInfo(user) {
+            document.getElementById('analyticsCurrentUserName').textContent = user.name;
+            document.getElementById('analyticsCurrentUserRole').textContent = getRoleDisplayName(user.role);
+            document.getElementById('analyticsCurrentUserDevice').textContent = user.device || '未分配';
+            
+            document.getElementById('analyticsSelectedUserInfo').style.display = 'block';
+        }
+
+        // 加载用户分析数据
+        function loadUserAnalyticsData(user) {
+            // 确保用户数据映射存在
+            if (!userDataMapping[user.id]) {
+                // 检查当前用户是否是第一个用户
+                const isFirstUser = userList.length > 0 && userList[0].id === user.id;
+                
+                let batteryData = generateUserBatteryData(user);
+                let trackingData = generateUserTrackingData(user);
+                
+                // 如果不是第一个用户，打乱数据顺序
+                if (!isFirstUser) {
+                    batteryData = shuffleArray([...batteryData]); // 创建副本并打乱
+                    trackingData = shuffleTrackingData(trackingData); // 打乱轨迹数据
+                    console.log(`🔀 分析用户 ${user.name} 的数据已打乱顺序`);
+                } else {
+                    console.log(`📊 分析用户 ${user.name} 是第一个用户，保持原始数据顺序`);
+                }
+                
+                userDataMapping[user.id] = {
+                    batteryData: batteryData,
+                    trackingData: trackingData
+                };
+            }
+            
+            // 分析电池数据
+            analyzeBatteryData(userDataMapping[user.id].batteryData);
+            
+            // 分析路径数据
+            analyzePathData(userDataMapping[user.id].trackingData);
+            
+            // 生成综合评估
+            generateEvaluationReport(user);
+        }
+
+        // 分析电池数据
+        function analyzeBatteryData(batteryData) {
+            if (!batteryData || batteryData.length === 0) {
+                console.warn('⚠️ 无电池数据进行分析');
+                return;
+            }
+            
+            console.log('🔋 开始分析电池数据，共', batteryData.length, '条记录');
+            
+            // 计算统计数据
+            const voltages = batteryData.map(d => d.voltage);
+            const currents = batteryData.map(d => d.current);
+            
+            const avgVoltage = voltages.reduce((a, b) => a + b, 0) / voltages.length;
+            const avgCurrent = currents.reduce((a, b) => a + b, 0) / currents.length;
+            const maxVoltage = Math.max(...voltages);
+            const minVoltage = Math.min(...voltages);
+            
+            // 计算电池健康度 (基于电压稳定性和范围)
+            const voltageRange = maxVoltage - minVoltage;
+            const voltageStability = 1 - (voltageRange / maxVoltage);
+            const healthScore = Math.min(100, Math.max(0, (voltageStability * 100 + (avgVoltage / 8.4) * 100) / 2));
+            
+            // 计算使用效率 (基于电流稳定性)
+            const currentStdDev = calculateStandardDeviation(currents);
+            const efficiencyScore = Math.min(100, Math.max(0, 100 - (currentStdDev * 200)));
+            
+            // 更新显示
+            document.getElementById('avgVoltage').textContent = avgVoltage.toFixed(2) + 'V';
+            document.getElementById('avgCurrent').textContent = avgCurrent.toFixed(2) + 'A';
+            document.getElementById('batteryHealth').textContent = healthScore.toFixed(0) + '%';
+            document.getElementById('efficiency').textContent = efficiencyScore.toFixed(0) + '%';
+            
+            // 更新趋势指示器
+            updateTrendIndicators(batteryData);
+            
+            // 创建趋势图表
+            createBatteryTrendChart(batteryData);
+            
+            // 生成建议
+            generateBatteryRecommendations(avgVoltage, avgCurrent, healthScore, efficiencyScore);
+        }
+
+        // 计算标准差
+        function calculateStandardDeviation(values) {
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            const squareDiffs = values.map(value => Math.pow(value - avg, 2));
+            const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / squareDiffs.length;
+            return Math.sqrt(avgSquareDiff);
+        }
+
+        // 更新趋势指示器
+        function updateTrendIndicators(batteryData) {
+            if (batteryData.length < 10) return;
+            
+            const recent = batteryData.slice(-5);
+            const previous = batteryData.slice(-10, -5);
+            
+            const recentAvgVoltage = recent.reduce((a, b) => a + b.voltage, 0) / recent.length;
+            const previousAvgVoltage = previous.reduce((a, b) => a + b.voltage, 0) / previous.length;
+            
+            const voltageTrend = recentAvgVoltage > previousAvgVoltage ? 'up' : 
+                                recentAvgVoltage < previousAvgVoltage ? 'down' : 'stable';
+            
+            const voltageTrendElement = document.getElementById('voltageTrend');
+            voltageTrendElement.className = `stat-trend trend-${voltageTrend}`;
+            voltageTrendElement.textContent = voltageTrend === 'up' ? '↗ 上升' : 
+                                            voltageTrend === 'down' ? '↘ 下降' : '→ 稳定';
+        }
+
+        // 创建电池趋势图表
+        function createBatteryTrendChart(batteryData) {
+            if (batteryTrendChart) {
+                batteryTrendChart.destroy();
+            }
+            
+            const canvas = document.getElementById('batteryTrendChart');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            
+            // 准备数据 - 只显示最近24小时的数据
+            const recentData = batteryData;
+            const labels = recentData.map((_, index) => `${index + 1}h`);
+            const voltageData = recentData.map(d => d.voltage);
+            const currentData = recentData.map(d => d.current);
+            
+            batteryTrendChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '电压趋势',
+                            data: voltageData,
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: '电流趋势',
+                            data: currentData,
+                            borderColor: '#ff6b6b',
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: '电压 (V)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: '电流 (A)'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 生成电池建议
+        function generateBatteryRecommendations(avgVoltage, avgCurrent, healthScore, efficiencyScore) {
+            // 充电建议
+            let chargingAdvice = '';
+            if (avgVoltage < 7.2) {
+                chargingAdvice = '电压偏低，建议及时充电。避免深度放电以延长电池寿命。';
+            } else if (avgVoltage > 8.0) {
+                chargingAdvice = '电压正常偏高，建议适度使用后再充电，避免过度充电。';
+            } else {
+                chargingAdvice = '电压水平良好，保持当前充电习惯即可。';
+            }
+            
+            // 使用建议
+            let usageAdvice = '';
+            if (efficiencyScore < 60) {
+                usageAdvice = '使用效率偏低，建议检查设备负载，避免超载使用。';
+            } else if (efficiencyScore > 85) {
+                usageAdvice = '使用效率很高，继续保持良好的使用习惯。';
+            } else {
+                usageAdvice = '使用效率正常，可适当优化使用方式提升效率。';
+            }
+            
+            // 维护建议
+            let maintenanceAdvice = '';
+            if (healthScore < 70) {
+                maintenanceAdvice = '电池健康度较低，建议进行专业检测和维护。';
+            } else if (healthScore > 90) {
+                maintenanceAdvice = '电池状态良好，继续定期保养即可。';
+            } else {
+                maintenanceAdvice = '电池状态正常，建议定期清洁接触点。';
+            }
+            
+            // 更新显示
+            document.getElementById('chargingAdvice').textContent = chargingAdvice;
+            document.getElementById('usageAdvice').textContent = usageAdvice;
+            document.getElementById('maintenanceAdvice').textContent = maintenanceAdvice;
+        }
+
+        // 分析路径数据
+        function analyzePathData(trackingData) {
+            if (!trackingData || Object.keys(trackingData).length === 0) {
+                console.warn('⚠️ 无路径数据进行分析');
+                return;
+            }
+            
+            console.log('🗺️ 开始分析路径数据，共', Object.keys(trackingData).length, '天记录');
+            
+            const period = parseInt(document.getElementById('pathAnalysisPeriod').value);
+            const dates = Object.keys(trackingData).sort().slice(-period);
+            
+            let totalDistance = 0;
+            let activeDays = 0;
+            let allPoints = [];
+            
+            dates.forEach(date => {
+                const dayData = trackingData[date];
+                if (dayData && dayData.path && dayData.path.length > 0) {
+                    totalDistance += dayData.totalDistance || 0;
+                    activeDays++;
+                    allPoints.push(...dayData.path);
+                }
+            });
+            
+            const avgDailyDistance = activeDays > 0 ? (totalDistance / activeDays) : 0;
+            const coverageArea = calculateCoverageArea(allPoints);
+            
+            // 更新显示
+            document.getElementById('totalDistance').textContent = totalDistance.toFixed(1) + ' km';
+            document.getElementById('activeDays').textContent = activeDays + ' 天';
+            document.getElementById('avgDailyDistance').textContent = avgDailyDistance.toFixed(1) + ' km';
+            document.getElementById('coverageArea').textContent = coverageArea.toFixed(2) + ' km²';
+            
+            // 创建路径分析地图
+            createPathAnalysisMap(allPoints, dates, trackingData);
+            
+            // 分析路径模式
+            analyzePathPatterns(trackingData, dates);
+        }
+
+        // 计算覆盖面积
+        function calculateCoverageArea(points) {
+            if (points.length < 3) return 0;
+            
+            const lats = points.map(p => p.lat);
+            const lngs = points.map(p => p.lng);
+            
+            const minLat = Math.min(...lats);
+            const maxLat = Math.max(...lats);
+            const minLng = Math.min(...lngs);
+            const maxLng = Math.max(...lngs);
+            
+            // 简化计算：矩形面积（实际应该用凸包算法）
+            const latDiff = maxLat - minLat;
+            const lngDiff = maxLng - minLng;
+            
+            // 转换为大约的km²（粗略计算）
+            return latDiff * lngDiff * 111 * 111; // 1度约等于111km
+        }
+
+        // 创建路径分析地图
+        function createPathAnalysisMap(allPoints, dates, trackingData) {
+            if (!allPoints || allPoints.length === 0) return;
+            
+            // 初始化地图
+            if (!analyticsMap) {
+                analyticsMap = L.map('pathAnalysisMap').setView([26.7638, 106.046], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(analyticsMap);
+            }
+            
+            // 清除现有图层
+            if (heatmapLayer) {
+                analyticsMap.removeLayer(heatmapLayer);
+            }
+            if (coverageLayer) {
+                analyticsMap.removeLayer(coverageLayer);
+            }
+            
+            // 创建覆盖区域
+            if (allPoints.length > 0) {
+                const latlngs = allPoints.map(p => [p.lat, p.lng]);
+                coverageLayer = L.polygon(latlngs, {
+                    color: 'rgba(102, 126, 234, 0.3)',
+                    fillColor: 'rgba(102, 126, 234, 0.1)',
+                    fillOpacity: 0.3
+                }).addTo(analyticsMap);
+                
+                // 调整视野
+                analyticsMap.fitBounds(coverageLayer.getBounds(), { padding: [20, 20] });
+            }
+            
+            // 绘制每天的路径
+            dates.forEach((date, index) => {
+                const dayData = trackingData[date];
+                if (dayData && dayData.path && dayData.path.length > 0) {
+                    const path = dayData.path.map(p => [p.lat, p.lng]);
+                    const color = `hsl(${(index * 137.5) % 360}, 70%, 50%)`; // 不同颜色
+                    
+                    L.polyline(path, {
+                        color: color,
+                        weight: 3,
+                        opacity: 0.7
+                    }).addTo(analyticsMap);
+                }
+            });
+        }
+
+        // 分析路径模式
+        function analyzePathPatterns(trackingData, dates) {
+            // 分析常用区域
+            const frequentAreas = analyzeFrequentAreas(trackingData, dates);
+            document.getElementById('frequentAreas').innerHTML = frequentAreas;
+            
+            // 分析活动时段
+            const timePatterns = analyzeTimePatterns(trackingData, dates);
+            document.getElementById('activeTimePatterns').innerHTML = timePatterns;
+            
+            // 分析骑行习惯
+            const ridingHabits = analyzeRidingHabits(trackingData, dates);
+            document.getElementById('ridingHabits').innerHTML = ridingHabits;
+        }
+
+        // 分析常用区域
+        function analyzeFrequentAreas(trackingData, dates) {
+            if (dates.length === 0) return '暂无数据';
+            
+            // 简化分析：基于活动天数的百分比
+            const activeRatio = (dates.length / 7) * 100;
+            
+            if (activeRatio > 80) {
+                return '🟢 高频活动区域<br>该用户在此区域活动频繁，建议优化充电设施布局';
+            } else if (activeRatio > 50) {
+                return '🟡 中频活动区域<br>用户在此区域有定期活动，可考虑增加服务点';
+            } else {
+                return '🔵 低频活动区域<br>偶尔经过区域，可作为扩展服务范围参考';
+            }
+        }
+
+        // 分析活动时段
+        function analyzeTimePatterns(trackingData, dates) {
+            if (dates.length === 0) return '暂无数据';
+            
+            // 模拟时段分析
+            const patterns = ['上午 9-11点', '下午 2-4点', '傍晚 6-8点'];
+            const mainPattern = patterns[Math.floor(Math.random() * patterns.length)];
+            
+            return `主要活动时段：<strong>${mainPattern}</strong><br>建议在此时段加强设备监控`;
+        }
+
+        // 分析骑行习惯
+        function analyzeRidingHabits(trackingData, dates) {
+            if (dates.length === 0) return '暂无数据';
+            
+            let totalDistance = 0;
+            dates.forEach(date => {
+                const dayData = trackingData[date];
+                if (dayData) {
+                    totalDistance += dayData.totalDistance || 0;
+                }
+            });
+            
+            const avgDaily = totalDistance / Math.max(dates.length, 1);
+            
+            if (avgDaily > 20) {
+                return '🚴‍♂️ <strong>长距离骑行</strong><br>平均每日' + avgDaily.toFixed(1) + 'km，属于高强度使用';
+            } else if (avgDaily > 10) {
+                return '🚲 <strong>中距离骑行</strong><br>平均每日' + avgDaily.toFixed(1) + 'km，使用频率适中';
+            } else {
+                return '🛴 <strong>短距离骑行</strong><br>平均每日' + avgDaily.toFixed(1) + 'km，多为短途出行';
+            }
+        }
+
+        // 生成综合评估报告
+        function generateEvaluationReport(user) {
+            const batteryData = userDataMapping[user.id].batteryData;
+            const trackingData = userDataMapping[user.id].trackingData;
+            
+            // 计算各项评分
+            const batteryScore = calculateBatteryScore(batteryData);
+            const frequencyScore = calculateFrequencyScore(trackingData);
+            const pathScore = calculatePathScore(trackingData);
+            const overallScore = Math.round((batteryScore + frequencyScore + pathScore) / 3);
+            
+            // 更新评分显示
+            updateScoreDisplay(batteryScore, frequencyScore, pathScore, overallScore);
+            
+            // 生成评估文本
+            const evaluationText = generateEvaluationText(user, batteryScore, frequencyScore, pathScore, overallScore);
+            document.getElementById('evaluationSummary').innerHTML = evaluationText;
+        }
+
+        // 计算电池管理评分
+        function calculateBatteryScore(batteryData) {
+            if (!batteryData || batteryData.length === 0) return 0;
+            
+            const voltages = batteryData.map(d => d.voltage);
+            const avgVoltage = voltages.reduce((a, b) => a + b, 0) / voltages.length;
+            const voltageStability = 1 - (Math.max(...voltages) - Math.min(...voltages)) / Math.max(...voltages);
+            
+            return Math.min(100, Math.max(0, (avgVoltage / 8.4) * 50 + voltageStability * 50));
+        }
+
+        // 计算骑行频率评分
+        function calculateFrequencyScore(trackingData) {
+            if (!trackingData) return 0;
+            
+            const activeDays = Object.keys(trackingData).length;
+            const maxDays = 7; // 假设评估最近7天
+            
+            return Math.min(100, (activeDays / maxDays) * 100);
+        }
+
+        // 计算路径效率评分
+        function calculatePathScore(trackingData) {
+            if (!trackingData) return 0;
+            
+            let totalDistance = 0;
+            let validDays = 0;
+            
+            Object.values(trackingData).forEach(dayData => {
+                if (dayData && dayData.totalDistance) {
+                    totalDistance += dayData.totalDistance;
+                    validDays++;
+                }
+            });
+            
+            if (validDays === 0) return 0;
+            
+            const avgDistance = totalDistance / validDays;
+            return Math.min(100, (avgDistance / 30) * 100); // 假设30km/天为满分
+        }
+
+        // 更新评分显示
+        function updateScoreDisplay(batteryScore, frequencyScore, pathScore, overallScore) {
+            // 更新总分
+            document.getElementById('overallScore').querySelector('.score-value').textContent = overallScore;
+            
+            // 更新各项评分
+            setTimeout(() => {
+                updateScoreBar('batteryScore', 'batteryScoreNum', batteryScore);
+                updateScoreBar('frequencyScore', 'frequencyScoreNum', frequencyScore);
+                updateScoreBar('pathScore', 'pathScoreNum', pathScore);
+            }, 500);
+        }
+
+        // 更新单个评分条
+        function updateScoreBar(barId, numId, score) {
+            const bar = document.getElementById(barId);
+            const num = document.getElementById(numId);
+            
+            if (bar && num) {
+                bar.style.width = score + '%';
+                num.textContent = Math.round(score);
+                
+                // 根据分数设置颜色
+                if (score >= 80) {
+                    bar.style.background = 'linear-gradient(90deg, #28a745, #20c997)';
+                } else if (score >= 60) {
+                    bar.style.background = 'linear-gradient(90deg, #ffc107, #fd7e14)';
+                } else {
+                    bar.style.background = 'linear-gradient(90deg, #dc3545, #e74c3c)';
+                }
+            }
+        }
+
+        // 生成评估文本
+        function generateEvaluationText(user, batteryScore, frequencyScore, pathScore, overallScore) {
+            let text = `<h5>🎯 ${user.name} 的使用评估</h5>`;
+            
+            if (overallScore >= 80) {
+                text += `<p><strong>综合评价：优秀</strong></p>`;
+                text += `<p>该用户展现出优秀的设备使用习惯，电池管理得当，骑行频率适中，路径规划合理。建议继续保持当前的使用模式。</p>`;
+            } else if (overallScore >= 60) {
+                text += `<p><strong>综合评价：良好</strong></p>`;
+                text += `<p>该用户的设备使用情况总体良好，但在某些方面还有提升空间。`;
+                
+                if (batteryScore < 70) text += `建议优化电池充放电习惯；`;
+                if (frequencyScore < 70) text += `可以增加使用频率；`;
+                if (pathScore < 70) text += `建议优化骑行路径规划；`;
+                
+                text += `</p>`;
+            } else {
+                text += `<p><strong>综合评价：需要改进</strong></p>`;
+                text += `<p>该用户的设备使用存在较大改进空间。建议：</p>`;
+                text += `<ul>`;
+                if (batteryScore < 60) text += `<li>改善电池管理习惯，避免过度充放电</li>`;
+                if (frequencyScore < 60) text += `<li>增加设备使用频率，提高设备利用率</li>`;
+                if (pathScore < 60) text += `<li>优化出行路径，提高骑行效率</li>`;
+                text += `</ul>`;
+            }
+            
+            text += `<p><small>评估基于最近的使用数据，建议定期查看以跟踪改进情况。</small></p>`;
+            
+            return text;
+        }
+
+        // 切换热力图显示
+        function toggleHeatmap() {
+            const checkbox = document.getElementById('showHeatmap');
+            if (!analyticsMap) return;
+            
+            if (checkbox.checked && heatmapLayer) {
+                analyticsMap.addLayer(heatmapLayer);
+            } else if (heatmapLayer) {
+                analyticsMap.removeLayer(heatmapLayer);
+            }
+        }
+
+        // 切换覆盖区域显示
+        function toggleCoverage() {
+            const checkbox = document.getElementById('showCoverage');
+            if (!analyticsMap) return;
+            
+            if (checkbox.checked && coverageLayer) {
+                analyticsMap.addLayer(coverageLayer);
+            } else if (coverageLayer) {
+                analyticsMap.removeLayer(coverageLayer);
+            }
+        }
+
+        // 更新路径分析周期
+        function updatePathAnalysis() {
+            if (currentAnalyticsUser) {
+                analyzePathData(userDataMapping[currentAnalyticsUser.id].trackingData);
+            }
+        }
+
+        // 刷新分析数据
+        function refreshAnalyticsData() {
+            if (!currentAnalyticsUser) return;
+            
+            const refreshIcon = document.getElementById('analyticsRefreshIcon');
+            refreshIcon.style.animation = 'spin 1s linear infinite';
+            
+            setTimeout(() => {
+                // 检查是否为第一个用户
+                const isFirst = isFirstUser(currentAnalyticsUser.id);
+                
+                // 重新生成数据
+                let newBatteryData = generateUserBatteryData(currentAnalyticsUser);
+                let newTrackingData = generateUserTrackingData(currentAnalyticsUser);
+                
+                // 如果不是第一个用户，打乱数据
+                if (!isFirst) {
+                    newBatteryData = shuffleArray([...newBatteryData]);
+                    newTrackingData = shuffleTrackingData(newTrackingData);
+                    console.log(`🔀 分析刷新时打乱了用户 ${currentAnalyticsUser.name} 的数据`);
+                }
+                
+                userDataMapping[currentAnalyticsUser.id] = {
+                    batteryData: newBatteryData,
+                    trackingData: newTrackingData
+                };
+                
+                loadUserAnalyticsData(currentAnalyticsUser);
+                refreshIcon.style.animation = '';
+                showSuccessMessage('分析数据已刷新');
+            }, 1500);
+        }
+
+        // 导出分析报告
+        function exportAnalyticsReport() {
+            if (!currentAnalyticsUser) {
+                alert('请先选择用户');
+                return;
+            }
+            
+            const user = currentAnalyticsUser;
+            const batteryData = userDataMapping[user.id].batteryData;
+            const trackingData = userDataMapping[user.id].trackingData;
+            
+            // 生成报告内容
+            const reportContent = generateReportContent(user, batteryData, trackingData);
+            
+            // 创建并下载文件
+            const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `${user.name}_数据分析报告_${new Date().toISOString().split('T')[0]}.txt`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showSuccessMessage('分析报告导出成功');
+        }
+
+        // 生成报告内容
+        function generateReportContent(user, batteryData, trackingData) {
+            const date = new Date().toLocaleDateString('zh-CN');
+            
+            let content = `用户数据分析报告\n`;
+            content += `===============================\n\n`;
+            content += `用户姓名: ${user.name}\n`;
+            content += `设备编号: ${user.device || '未分配'}\n`;
+            content += `生成日期: ${date}\n\n`;
+            
+            content += `电池分析\n`;
+            content += `-----------\n`;
+            if (batteryData && batteryData.length > 0) {
+                const avgVoltage = batteryData.reduce((a, b) => a + b.voltage, 0) / batteryData.length;
+                const avgCurrent = batteryData.reduce((a, b) => a + b.current, 0) / batteryData.length;
+                content += `平均电压: ${avgVoltage.toFixed(2)}V\n`;
+                content += `平均电流: ${avgCurrent.toFixed(2)}A\n`;
+                content += `数据点数: ${batteryData.length}条\n\n`;
+            }
+            
+            content += `路径分析\n`;
+            content += `-----------\n`;
+            if (trackingData) {
+                const dates = Object.keys(trackingData);
+                const totalDistance = dates.reduce((sum, date) => {
+                    return sum + (trackingData[date].totalDistance || 0);
+                }, 0);
+                content += `活动天数: ${dates.length}天\n`;
+                content += `总距离: ${totalDistance.toFixed(1)}km\n`;
+                content += `平均日距离: ${(totalDistance / Math.max(dates.length, 1)).toFixed(1)}km\n\n`;
+            }
+            
+            content += `建议事项\n`;
+            content += `-----------\n`;
+            content += `1. 定期检查电池状态\n`;
+            content += `2. 保持适度的使用频率\n`;
+            content += `3. 优化出行路径规划\n`;
+            content += `4. 注意设备维护保养\n\n`;
+            
+            content += `报告结束\n`;
+            content += `===============================`;
+            
+            return content;
+        }
+
+        // 显示分析数据
+        function showAnalyticsData() {
+            document.getElementById('analyticsDataContainer').style.display = 'block';
+            document.getElementById('analyticsNoDataMessage').style.display = 'none';
+        }
+
+        // 隐藏分析数据
+        function hideAnalyticsData() {
+            document.getElementById('analyticsDataContainer').style.display = 'none';
+            document.getElementById('analyticsNoDataMessage').style.display = 'block';
+            document.getElementById('analyticsSelectedUserInfo').style.display = 'none';
+            currentAnalyticsUser = null;
+        }
+
+        // // 修改原有的showPage函数，添加分析页面初始化
+        // const originalShowPageAnalytics = showPage;
+        // window.showPage = function(pageId) {
+        //     originalShowPageAnalytics(pageId);
+            
+        //     // 如果切换到分析页面，初始化分析功能
+        //     if (pageId === 'analytics') {
+        //         setTimeout(() => {
+        //             initializeAnalyticsPage();
+        //         }, 100);
+        //     }
+        // };
+
+        
+        /* ---------- 用户管理页面功能 ---------- */
+        // 加载用户列表
+        function loadUserList() {
+            const saved = localStorage.getItem('systemUserList');
+            if (saved) {
+                try {
+                    userList = JSON.parse(saved);
+                } catch (error) {
+                    console.error('❌ 用户列表加载失败:', error);
+                    userList = [];
+                }
+            }
+            filteredUserList = [...userList];
+            renderUserList();
+            updateUserStatistics();
+        }
+
+        // 保存用户列表
+        function saveUserList() {
+            try {
+                localStorage.setItem('systemUserList', JSON.stringify(userList));
+                console.log('✅ 用户列表已保存');
+            } catch (error) {
+                console.error('❌ 用户列表保存失败:', error);
+            }
+        }
+
+        // 添加新用户
+        function addNewUser() {
+            const nameInput = document.getElementById('newUserName');
+            const roleSelect = document.getElementById('newUserRole');
+            const deviceInput = document.getElementById('newUserDevice');
+            const addBtn = document.querySelector('#addUserForm .btn-primary');
+            const btnText = document.getElementById('addUserBtnText');
+            const spinner = document.getElementById('addUserSpinner');
+
+            const name = nameInput.value.trim();
+            const role = roleSelect.value;
+            const device = deviceInput.value.trim();
+
+            // 表单验证
+            if (!name) {
+                alert('请输入用户姓名');
+                nameInput.focus();
+                return;
+            }
+
+            if (name.length < 2) {
+                alert('用户姓名至少需要2个字符');
+                nameInput.focus();
+                return;
+            }
+
+            // 检查设备数量限制
+            if (userList.length >= adminSettings.maxDevices) {
+                showCapacityWarning(`无法添加用户：已达到最大设备接入数量限制 (${adminSettings.maxDevices}台)`);
+                return;
+            }
+
+            // 检查用户名是否重复
+            if (userList.some(user => user.name.toLowerCase() === name.toLowerCase())) {
+                alert('该用户姓名已存在，请使用不同的姓名');
+                nameInput.focus();
+                return;
+            }
+
+            // 检查设备编号是否重复（如果提供了设备编号）
+            if (device && userList.some(user => user.device && user.device.toLowerCase() === device.toLowerCase())) {
+                alert('该设备编号已被使用，请使用不同的设备编号');
+                deviceInput.focus();
+                return;
+            }
+
+            // 显示加载状态
+            addBtn.disabled = true;
+            btnText.textContent = '添加中...';
+            spinner.classList.remove('hidden');
+
+            // 模拟异步操作
+            setTimeout(() => {
+                try {
+                    // 创建新用户对象
+                    const newUser = {
+                        id: Date.now().toString(),
+                        name: name,
+                        role: role,
+                        device: device || null,
+                        createdAt: new Date().toISOString(),
+                        status: 'active',
+                        lastLogin: null
+                    };
+
+                    // 添加到用户列表
+                    userList.push(newUser);
+                    filteredUserList = [...userList];
+
+                    // 保存到localStorage
+                    saveUserList();
+
+                    // 更新界面
+                    renderUserList();
+                    initializeMonitoringPage();
+                    updateUserStatistics();
+                    updateDashboardDeviceStats();
+                    clearUserForm();
+                    hideCapacityWarning();
+
+                    console.log('✅ 用户添加成功:', newUser);
+                    showSuccessMessage(`用户 "${name}" 添加成功！`);
+
+                } catch (error) {
+                    console.error('❌ 添加用户失败:', error);
+                    alert('添加用户失败，请重试');
+                } finally {
+                    // 恢复按钮状态
+                    addBtn.disabled = false;
+                    btnText.textContent = '添加用户';
+                    spinner.classList.add('hidden');
+                }
+            }, 800); // 模拟网络延迟
+        }
+
+        // 删除用户
+        function deleteUser(userId) {
+            const user = userList.find(u => u.id === userId);
+            if (!user) return;
+
+            if (confirm(`确定要删除用户 "${user.name}" 吗？此操作不可撤销。`)) {
+                userList = userList.filter(u => u.id !== userId);
+                filteredUserList = filteredUserList.filter(u => u.id !== userId);
+                
+                saveUserList();
+                renderUserList();
+                initializeMonitoringPage();
+                updateUserStatistics(); 
+                updateDashboardDeviceStats();// 这会同时更新仪表板
+                hideCapacityWarning();
+                
+                console.log('✅ 用户删除成功:', user.name);
+                showSuccessMessage(`用户 "${user.name}" 已删除`);
+            }
+        }
+        
+        // 编辑用户状态
+        function toggleUserStatus(userId) {
+            const user = userList.find(u => u.id === userId);
+            if (!user) return;
+
+            user.status = user.status === 'active' ? 'inactive' : 'active';
+            saveUserList();
+            renderUserList();
+            updateDashboardDeviceStats();
+            
+            console.log(`✅ 用户状态已更新: ${user.name} -> ${user.status}`);
+        }
+
+        // 渲染用户列表 （包括有用户列表的页面分布 html）
+        function renderUserList() {
+            const container = document.getElementById('userListContainer');
+            const emptyState = document.getElementById('emptyUserState');
+
+            if (filteredUserList.length === 0) {
+                // 修复：直接设置innerHTML而不是appendChild
+                container.innerHTML = `
+                    <div id="emptyUserState" class="text-center" style="color: #6c757d; padding: 40px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">👤</div>
+                        <h4>暂无用户数据</h4>
+                        <p>请添加第一个用户开始使用系统</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const listHTML = `
+                <div class="user-list-table">
+                    <div class="user-list-header" style="display: grid; grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr 1.5fr; gap: 15px; padding: 12px 15px; background-color: #f8f9fa; border-radius: 6px; font-weight: 600; color: #495057; margin-bottom: 10px;">
+                        <div>姓名</div>
+                        <div>角色</div>
+                        <div>设备编号</div>
+                        <div>状态</div>
+                        <div>注册时间</div>
+                        <div>操作</div>
+                    </div>
+                    ${filteredUserList.map(user => `
+                        <div class="user-list-item" style="display: grid; grid-template-columns: 2fr 1fr 1.5fr 1fr 1fr 1.5fr; gap: 15px; padding: 15px; border: 1px solid #e9ecef; border-radius: 6px; margin-bottom: 8px; background-color: white; align-items: center;">
+                            <div>
+                                <strong style="color: #2c3e50;">${user.name}</strong>
+                                <div style="font-size: 12px; color: #6c757d;">ID: ${user.id}</div>
+                            </div>
+                            <div>
+                                <span class="role-badge role-${user.role}" style="padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
+                                    ${getRoleDisplayName(user.role)}
+                                </span>
+                            </div>
+                            <div style="color: #6c757d;">
+                                ${user.device || '<span style="color: #adb5bd;">未分配</span>'}
+                            </div>
+                            <div>
+                                <button class="status-btn status-${user.status}" onclick="toggleUserStatus('${user.id}')" 
+                                        style="padding: 4px 12px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 500;">
+                                    ${user.status === 'active' ? '启用' : '禁用'}
+                                </button>
+                            </div>
+                            <div style="font-size: 12px; color: #6c757d;">
+                                ${formatDate(user.createdAt)}
+                            </div>
+                            <div>
+                                <button onclick="deleteUser('${user.id}')" class="btn-sm btn-danger" 
+                                        style="padding: 6px 12px; background-color: #f8d7da; color: #c82333; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; margin-right: 5px;">
+                                    删除
+                                </button>
+                                <button onclick="viewUserDetails('${user.id}')" class="btn-sm btn-info"
+                                        style="padding: 6px 12px; background-color: #e2f0fb; color: #117a8b; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">
+                                    详情
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            container.innerHTML = listHTML;
+        }
+
+        // 用户角色显示名称
+        function getRoleDisplayName(role) {
+            const roleNames = {
+                'user': '普通用户',
+                'operator': '操作员',
+                'admin': '管理员'
+            };
+            return roleNames[role] || role;
+        }
+
+        // 格式化日期
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // 更新用户统计
+        function updateUserStatistics() {
+            const currentCount = userList.length;
+            const maxDevices = adminSettings.maxDevices;
+            const usagePercent = Math.round((currentCount / maxDevices) * 100);
+
+            // 更新数字显示
+            document.getElementById('currentUserCount').textContent = currentCount;
+            document.getElementById('maxUserDevices').textContent = maxDevices;
+
+            // 更新使用率进度条
+            const statusIndicator = document.getElementById('userStatusIndicator');
+            const statusText = document.getElementById('userStatusText');
+
+            // 根据使用率设置颜色和状态
+            if (usagePercent >= 90) {
+                statusIndicator.className = 'status-indicator status-offline';
+                statusText.textContent = '容量即将满载';
+                showCapacityWarning(`设备容量紧张：已使用 ${currentCount}/${maxDevices} 台`);
+            } else if (usagePercent >= 70) {
+                statusIndicator.className = 'status-indicator status-warning';
+                statusText.textContent = '使用率较高';
+                hideCapacityWarning();
+            } else {
+                statusIndicator.className = 'status-indicator status-online';
+                statusText.textContent = '系统正常';
+                hideCapacityWarning();
+            }
+
+            // 更新其他页面的统计显示
+            const onlineDeviceCount = document.getElementById('onlineDeviceCount');
+            if (onlineDeviceCount) {
+                onlineDeviceCount.textContent = userList.filter(u => u.status === 'active').length;
+            }
+        }
+
+        // 显示容量警告
+        function showCapacityWarning(message) {
+            const warning = document.getElementById('capacityWarning');
+            const warningMessage = document.getElementById('warningMessage');
+            if (warning && warningMessage) {
+                warningMessage.textContent = message;
+                warning.classList.remove('hidden');
+            }
+        }
+
+        // 隐藏容量警告
+        function hideCapacityWarning() {
+            const warning = document.getElementById('capacityWarning');
+            if (warning) {
+                warning.classList.add('hidden');
+            }
+        }
+
+        // 清空用户表单
+        function clearUserForm() {
+            document.getElementById('newUserName').value = '';
+            document.getElementById('newUserRole').value = 'user';
+            document.getElementById('newUserDevice').value = '';
+        }
+
+        // 过滤用户列表
+        function filterUserList() {
+            const searchTerm = document.getElementById('userSearchInput').value.toLowerCase().trim();
+            
+            if (!searchTerm) {
+                filteredUserList = [...userList];
+            } else {
+                filteredUserList = userList.filter(user => 
+                    user.name.toLowerCase().includes(searchTerm) ||
+                    (user.device && user.device.toLowerCase().includes(searchTerm)) ||
+                    getRoleDisplayName(user.role).toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            renderUserList();
+        }
+
+        // 刷新用户列表
+        function refreshUserList() {
+            const refreshIcon = document.getElementById('refreshIcon');
+            refreshIcon.style.animation = 'spin 1s linear infinite';
+            
+            setTimeout(() => {
+                loadUserList();
+                refreshIcon.style.animation = '';
+                showSuccessMessage('用户列表已刷新');
+            }, 500);
+        }
+
+        // 查看用户详情
+        function viewUserDetails(userId) {
+            const user = userList.find(u => u.id === userId);
+            if (!user) return;
+
+            const details = `
+                用户详细信息：
+
+                姓名：${user.name}
+                角色：${getRoleDisplayName(user.role)}
+                设备编号：${user.device || '未分配'}
+                状态：${user.status === 'active' ? '启用' : '禁用'}
+                注册时间：${formatDate(user.createdAt)}
+                用户ID：${user.id}
+                    `;
+            alert(details);
+        }
+
+        // 显示成功消息
+        function showSuccessMessage(message) {
+            // 创建临时提示元素
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background-color: #28a745;
+                color: white;
+                padding: 12px 20px;
+                border-radius: 6px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                z-index: 9999;
+                font-weight: 500;
+                animation: slideInRight 0.3s ease;
+            `;
+            toast.textContent = message;
+
+            // 添加动画样式
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideInRight {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+
+            document.body.appendChild(toast);
+
+            // 3秒后自动移除
+            setTimeout(() => {
+                toast.style.animation = 'slideInRight 0.3s ease reverse';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 3000);
+        }
+
+
+        /* ---------- 管理员设置页面 ---------- */
+
+        // 修改现有的saveAdminSettings函数，添加用户统计更新
+        function saveAdminSettings() {
+            const name = document.getElementById('adminName').value.trim();
+            const avatar = document.getElementById('adminAvatar').value.trim().toUpperCase();
+            const bio = document.getElementById('adminBio').value.trim();
+            const maxDevices = parseInt(document.getElementById('deviceCount').textContent);
+            const storageLimit = parseInt(document.getElementById('storageLimit').textContent);
+
+            if (!name) {
+                alert('请输入管理员名称');
+                return;
+            }
+
+            if (!avatar) {
+                alert('请输入头像字母');
+                return;
+            }
+
+            // 检查设备数量是否小于当前用户数量
+            if (maxDevices < userList.length) {
+                if (!confirm(`当前设置的最大设备数量 (${maxDevices}) 小于已注册用户数量 (${userList.length})。\n\n确定要继续吗？这可能会影响系统功能。`)) {
+                    return;
+                }
+            }
+
+            // 更新设置
+            adminSettings = {
+                name: name,
+                avatar: avatar,
+                bio: bio,
+                maxDevices: maxDevices,
+                storageLimit: storageLimit
+            };
+
+            // 保存到localStorage
+            localStorage.setItem('adminSettings', JSON.stringify(adminSettings));
+
+            syncStorageLimitToPages();
+
+            // 更新界面显示
+            updateAdminDisplay();
+            updateDeviceDisplays();
+            updateUserStatistics(); // 这会同时更新仪表板
+
+            showSuccessMessage('设置保存成功！');
+            console.log('设置保存成功！已修改设备存储上限！');
+        }
+
+        // 修改设备数量
+        function changeDeviceCount(delta) {
+            const currentCount = parseInt(document.getElementById('deviceCount').textContent);
+            const newCount = Math.max(1, Math.min(20, currentCount + delta));
+            
+            document.getElementById('deviceCount').textContent = newCount;
+            adminSettings.maxDevices = newCount;
+        }
+
+        // 修改存储数量上限
+        function changeStorageLimit(delta) {
+            const currentLimit = parseInt(document.getElementById('storageLimit').textContent);
+            const newLimit = Math.max(30, Math.min(100, currentLimit + delta));  // 最大100 最小30
+            
+            document.getElementById('storageLimit').textContent = newLimit;
+            adminSettings.storageLimit = newLimit;
+            
+            // // 立即同步到localStorage，供page和page2使用
+            // syncStorageLimitToPages();
+        }
+
+        // 将存储数量上限更新到page中
+        function syncStorageLimitToPages() {
+            const storageConfig = {
+                maxBatteryDataPoints: adminSettings.storageLimit,
+                maxLocationDataPoints: adminSettings.storageLimit,
+                maxHistoryDays: 30, 
+                lastUpdated: new Date().toISOString()
+            };
+            
+            // 保存配置供其他页面使用
+            localStorage.setItem('storageConfig', JSON.stringify(storageConfig));
+            
+            console.log('存储配置已更新:', storageConfig);
+            
+            // 立即清理现有数据以符合新的限制
+            cleanupExistingData();
+        }
+
+        // 清理现有数据以符合新的存储限制
+        function cleanupExistingData() {
+            try {
+                // 清理电池历史数据
+                const batteryData = localStorage.getItem('batteryHistoryData');
+                if (batteryData) {
+                    let parsedData = JSON.parse(batteryData);
+                    
+                    // 检查数据结构是否正确
+                    if (parsedData && parsedData.voltage && parsedData.current && parsedData.timestamps &&
+                        Array.isArray(parsedData.voltage) && Array.isArray(parsedData.current) && Array.isArray(parsedData.timestamps)) {
+                        
+                        const voltageLength = parsedData.voltage.length;
+                        const currentLength = parsedData.current.length;
+                        const timestampsLength = parsedData.timestamps.length;
+                        
+                        // 获取最大长度作为数据点数量
+                        const dataPointCount = Math.max(voltageLength, currentLength, timestampsLength);
+                        
+                        console.log(`📊 电池数据检查: voltage(${voltageLength}), current(${currentLength}), timestamps(${timestampsLength})`);
+                        
+                        if (dataPointCount > adminSettings.storageLimit) {
+                            // 保留最新的数据 - 对每个数组分别处理
+                            const keepCount = adminSettings.storageLimit;
+                            
+                            parsedData.voltage = parsedData.voltage.slice(-keepCount);
+                            parsedData.current = parsedData.current.slice(-keepCount);
+                            parsedData.timestamps = parsedData.timestamps.slice(-keepCount);
+                            
+                            localStorage.setItem('batteryHistoryData', JSON.stringify(parsedData));
+                            console.log(`🔋 电池数据清理完成，保留最新 ${keepCount} 条，删除了 ${dataPointCount - keepCount} 条`);
+                        } else {
+                            console.log(`✅ 电池数据检查完成，当前 ${dataPointCount} 条数据在限制范围内`);
+                        }
+                        
+                    } else {
+                        console.warn('⚠️ 电池数据格式不正确，跳过清理');
+                    }
+                } else {
+                    console.log('📊 未找到电池历史数据');
+                }
+
+                // 清理位置数据
+                const mockData = localStorage.getItem('mockData');
+                if (mockData) {
+                    let parsedMockData = JSON.parse(mockData);
+                    let totalPoints = 0;
+                    
+                    // 提取每一天的位置信息
+                    Object.keys(parsedMockData).forEach(date => {
+                        const dayData = parsedMockData[date];
+                        if (dayData && dayData.path && Array.isArray(dayData.path)) {
+                            const currentDateLength = dayData.path.length;
+
+                            if (currentDateLength > adminSettings.storageLimit) {
+                                const currentRemoveLength = currentDateLength - adminSettings.storageLimit;
+                                parsedMockData[date].path = dayData.path.slice(-adminSettings.storageLimit);    // 切除最新的storageLimit个 并且存储到 MockData
+                                totalPoints += currentRemoveLength;
+
+                                console.log(`${date}：位置过多，清除${currentRemoveLength}个位置点`)
+                            }
+                        }
+                    });
+
+                    // 如果有清理操作，更新localStorage
+                    if (totalPoints > 0) {
+                        localStorage.setItem('mockData', JSON.stringify(parsedMockData));
+                        console.log(`位置数据清理完成，总共删除了 ${totalPoints} 个位置点`);
+                    } else {
+                        console.log('位置数据检查完成，无需清理');
+                    }
+                }
+
+            } catch (error) {
+                console.error('❌ 数据清理失败:', error);
+            }
+        }
+
+        // 保存管理员设置
+        function saveAdminSettings() {
+            const name = document.getElementById('adminName').value.trim();
+            const avatar = document.getElementById('adminAvatar').value.trim().toUpperCase();
+            const bio = document.getElementById('adminBio').value.trim();
+            const maxDevices = parseInt(document.getElementById('deviceCount').textContent);
+            const storageLimit = parseInt(document.getElementById('storageLimit').textContent);
+
+            if (!name) {
+                alert('请输入管理员名称');
+                return;
+            }
+
+            if (!avatar) {
+                alert('请输入头像字母');
+                return;
+            }
+
+            // 检查设备数量是否小于当前用户数量
+            if (maxDevices < userList.length) {
+                if (!confirm(`当前设置的最大设备数量 (${maxDevices}) 小于已注册用户数量 (${userList.length})。\n\n确定要继续吗？这可能会影响系统功能。`)) {
+                    return;
+                }
+            }
+
+            // 更新设置
+            adminSettings = {
+                name: name,
+                avatar: avatar,
+                bio: bio,
+                maxDevices: maxDevices,
+                storageLimit: storageLimit
+            };
+
+            // 保存到localStorage
+            localStorage.setItem('adminSettings', JSON.stringify(adminSettings));
+
+            syncStorageLimitToPages();
+
+            // 更新界面显示
+            updateAdminDisplay();
+            updateDeviceDisplays();
+            updateUserStatistics(); // 新增：更新用户统计
+
+            showSuccessMessage('设置保存成功！');
+            console.log(`设置保存成功！已修改设备存储上限！`);
+        }
+
+        // 重置管理员设置
+        function resetAdminSettings() {
+            if (confirm('确定要重置所有设置为默认值吗？')) {
+                adminSettings = {
+                    name: '管理员',
+                    avatar: 'A',
+                    bio: '系统管理员，负责整体系统运维和管理工作。',
+                    maxDevices: 5,
+                    storageLimit: 30
+                };
+
+                try {
+                    const keys = [
+                        'adminSettings',
+                        'storageConfig'
+                    ];
+                    keys.forEach(key => {
+                        if (localStorage.getItem(key)) {
+                            localStorage.removeItem(key);
+                            console.log(`已清除: ${key}`);
+                        }
+                    });
+                } catch (error) {
+                    console.error('❌ 清除本地数据失败:', error);
+                }
+
+                localStorage.setItem('adminSettings', JSON.stringify(adminSettings));
+                
+                loadAdminSettingsToForm();
+                updateAdminDisplay();
+                updateDeviceDisplays();
+                syncStorageLimitToPages();
+
+                console.log(`设置已重置为默认值`);
+            }
+        }
+
+        // 加载管理员设置
+        function loadAdminSettings() {
+            const saved = localStorage.getItem('adminSettings');
+            if (saved) {
+                adminSettings = JSON.parse(saved);
+            }
+            
+            loadAdminSettingsToForm();
+            updateAdminDisplay();
+        }
+
+        // 将设置加载到表单
+        function loadAdminSettingsToForm() {
+            document.getElementById('adminName').value = adminSettings.name;
+            document.getElementById('adminAvatar').value = adminSettings.avatar;
+            document.getElementById('adminBio').value = adminSettings.bio;
+            document.getElementById('deviceCount').textContent = adminSettings.maxDevices;
+            document.getElementById('storageLimit').textContent = adminSettings.storageLimit;
+            document.getElementById('avatarPreview').textContent = adminSettings.avatar;
+        }
+
+        // 更新管理员显示
+        function updateAdminDisplay() {
+            document.getElementById('displayUserName').textContent = adminSettings.name;
+            document.getElementById('displayUserAvatar').textContent = adminSettings.avatar;
+        }
+
+        // 更新设备数量显示
+        function updateDeviceDisplays() {
+            // 更新各个页面的设备计数显示
+            const deviceCountDisplay = document.getElementById('deviceCountDisplay');
+            const maxDeviceCount = document.getElementById('maxDeviceCount');
+            
+            if (deviceCountDisplay) deviceCountDisplay.textContent = adminSettings.maxDevices;
+            if (maxDeviceCount) maxDeviceCount.textContent = adminSettings.maxDevices;
+            
+            // 更新仪表板设备统计
+            updateDashboardDeviceStats();
+        }
+
+        const originalDeleteUser = deleteUser;
+        window.deleteUser = function(userId) {
+            // 如果删除的是当前监控用户，清空监控
+            if (currentMonitoringUser && currentMonitoringUser.id === userId) {
+                hideMonitoringData();
+            }
+            
+            // 如果删除的是当前分析用户，清空分析
+            if (currentAnalyticsUser && currentAnalyticsUser.id === userId) {
+                hideAnalyticsData();
+            }
+            
+            // 删除用户数据映射
+            delete userDataMapping[userId];
+            
+            // 获取被删除用户在列表中的位置
+            const deletedUserIndex = userList.findIndex(u => u.id === userId);
+            const wasFirstUser = deletedUserIndex === 0;
+            
+            // 执行原始删除逻辑
+            originalDeleteUser(userId);
+            
+            // 如果删除的是第一个用户，需要重新生成新的第一个用户的数据（保持原始顺序）
+            if (wasFirstUser && userList.length > 0) {
+                const newFirstUser = userList[0];
+                if (userDataMapping[newFirstUser.id]) {
+                    console.log(`🔄 重新生成新的第一个用户 ${newFirstUser.name} 的原始数据`);
+                    
+                    // 重新生成原始顺序的数据
+                    userDataMapping[newFirstUser.id] = {
+                        batteryData: generateUserBatteryData(newFirstUser),
+                        trackingData: generateUserTrackingData(newFirstUser)
+                    };
+                    
+                    // 如果当前正在监控或分析这个用户，需要刷新显示
+                    if (currentMonitoringUser && currentMonitoringUser.id === newFirstUser.id) {
+                        loadBatteryChart(userDataMapping[newFirstUser.id].batteryData);
+                        loadDateSelector(userDataMapping[newFirstUser.id].trackingData);
+                    }
+                    
+                    if (currentAnalyticsUser && currentAnalyticsUser.id === newFirstUser.id) {
+                        loadUserAnalyticsData(newFirstUser);
+                    }
+                }
+            }
+            
+            setTimeout(() => {
+                loadUserSelector();
+                loadAnalyticsUserSelector();
+            }, 100);
+        };
+
+        // 页面加载时初始化 - 添加存储配置同步
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAdminSettings();
+            loadUserList(); 
+            updateDeviceDisplays();
+            updateUserStatistics();
+            updateDashboardDeviceStats();
+
+            initializeMonitoringPage();
+            setupMonitoringComponents();
+            initializeAnalyticsPage();
+            syncStorageLimitToPages();
+            console.log('控制台界面加载完成');
+        });
+
+        const mapStyles = `
+        <style>
+        #monitoringMap {
+            height: 500px !important;
+            width: 100% !important;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            z-index: 1;
+        }
+
+        .custom-marker {
+            text-align: center;
+            line-height: 25px;
+            background: none !important;
+            border: none !important;
+        }
+
+        .leaflet-popup-content {
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        </style>
+        `;
+
+        // 将样式添加到页面
+        if (!document.querySelector('#map-styles')) {
+            const styleElement = document.createElement('style');
+            styleElement.id = 'map-styles';
+            styleElement.innerHTML = mapStyles;
+            document.head.appendChild(styleElement);
+        }
+
+        // 头像字母实时预览
+        document.getElementById('adminAvatar').addEventListener('input', function() {
+            const value = this.value.toUpperCase();
+            document.getElementById('avatarPreview').textContent = value || 'A';
+        });
+
+        // 菜单项点击事件
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const pageId = this.dataset.page;
+                if (pageId) {
+                    showPage(pageId);
+                }
+            });
+        });
+
+        // 导航栏链接点击事件
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const pageId = this.dataset.page;
+                if (pageId) {
+                    showPage(pageId);
+                }
+            });
+        });
+    </script>
+</body>
+</html>
