@@ -2134,6 +2134,34 @@
       north: 26.851, south: 26.435, east: 106.945, west: 106.522
     };
 
+    // 成都市地理边界配置
+    const CHENGDU_BOUNDS = {
+      north: 31.032,   // 成都最北端
+      south: 30.058,   // 成都最南端
+      east: 104.714,   // 成都最东端
+      west: 101.956    // 成都最西端
+    };
+    const CHENGDU_CITY_BOUNDS = {
+      north: 30.823,   // 成都市区最北端
+      south: 30.578,   // 成都市区最南端
+      east: 104.160,   // 成都市区最东端
+      west: 101.950    // 成都市区最西端
+    };
+
+    // 浙江
+    const ZHEJIANG_BOUNDS = {
+      north: 30.868,   // 浙江最北端
+      south: 27.151,   // 浙江最南端
+      east: 122.061,   // 浙江最东端
+      west: 118.028    // 浙江最西端
+    };
+    const ZHEJIANG_CITY_BOUNDS = {
+      north: 30.328,   // 杭州市区最北端（以杭州为代表城市）
+      south: 29.358,   // 杭州市区最南端
+      east: 120.521,   // 杭州市区最东端
+      west: 119.882    // 杭州市区最西端
+    };
+
     // MQTT配置
     const mqttOptions = {
       clean: true,
@@ -2473,6 +2501,16 @@
       return lat >= bounds.south && lat <= bounds.north && lng >= bounds.west && lng <= bounds.east;
     }
 
+    function isLocationInChengdu(lat, lng, strictMode = false) {
+      const bounds = strictMode ? CHENGDU_CITY_BOUNDS : CHENGDU_BOUNDS;
+      return lat >= bounds.south && lat <= bounds.north && lng >= bounds.west && lng <= bounds.east;
+    }
+
+    function isLocationInZhejiang(lat, lng, strictMode = false) {
+      const bounds = strictMode ? ZHEJIANG_CITY_BOUNDS : ZHEJIANG_BOUNDS;
+      return lat >= bounds.south && lat <= bounds.north && lng >= bounds.west && lng <= bounds.east;
+    }
+
     /**
      * 校验并过滤location数组，只保留贵阳市范围内的坐标
      */
@@ -2485,6 +2523,18 @@
         const numLng = parseFloat(lng);
         if (isNaN(numLat) || isNaN(numLng)) return false;
         return isLocationInGuiyang(numLat, numLng);
+      });
+    }
+
+    function validateChengduLocations(locations) {
+      if (!Array.isArray(locations)) return [];
+      return locations.filter(location => {
+        if (!Array.isArray(location) || location.length < 2) return false;
+        const [lat, lng] = location;
+        const numLat = parseFloat(lat);
+        const numLng = parseFloat(lng);
+        if (isNaN(numLat) || isNaN(numLng)) return false;
+        return isLocationInChengdu(numLat, numLng);
       });
     }
 
@@ -4273,15 +4323,15 @@
 
             // 检查坐标是否有效
             if (!isNaN(numLat) && !isNaN(numLng)) {
-              // 检查是否在贵阳市范围内
-              if (isLocationInGuiyang(numLat, numLng)) {
-                // 坐标有效且在贵阳市内，添加到路径
+              // 检查是否在成都市范围内
+              if (isLocationInChengdu(numLat, numLng)) {
+                // 坐标有效且在成都市内，添加到路径
                 if (!mockData[date].path) mockData[date].path = [];
                 mockData[date].path.push([numLat, numLng]);
-                
-                console.log(`✅ 添加有效贵阳坐标: [${numLat.toFixed(6)}, ${numLng.toFixed(6)}]`);
+
+                console.log(`✅ 添加有效成都市坐标: [${numLat.toFixed(6)}, ${numLng.toFixed(6)}]`);
               } else {
-                console.warn(`⚠️ 坐标不在贵阳市范围内: [${numLat.toFixed(6)}, ${numLng.toFixed(6)}]，保留上次有效位置`);
+                console.warn(`⚠️ 坐标不在成都市范围内: [${numLat.toFixed(6)}, ${numLng.toFixed(6)}]，保留上次有效位置`);
                 // 不更新location，保持原有路径数据
               }
             } else {

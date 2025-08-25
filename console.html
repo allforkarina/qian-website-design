@@ -1631,6 +1631,14 @@
 
             // 更新菜单状态
             updateMenuState(pageId);
+
+            setTimeout(() => {
+                if (pageId === 'monitoring') {
+                    initializeMonitoringMap();
+                } else if (pageId === 'analytics') {
+                    initializeAnalyticsMap();
+                }
+            }, 100);
         }
 
         // 更新菜单状态
@@ -1746,6 +1754,23 @@
         function initializeMonitoringPage() {
             loadUserSelector();
             setupMonitoringComponents();
+        }
+
+        // 初始化监控地图
+        function initializeMonitoringMap() {
+            if (!monitoringMap) {
+                monitoringMap = L.map('monitoringMap').setView([26.7638, 106.046], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap 贡献者'
+                }).addTo(monitoringMap);
+                console.log('🗺️ 监控地图初始化完成');
+            } else {
+                // 如果地图已存在，刷新地图尺寸
+                setTimeout(() => {
+                    monitoringMap.invalidateSize();
+                    console.log('🔄 监控地图尺寸已刷新');
+                }, 50);
+            }
         }
 
         // 加载用户选择器
@@ -1972,20 +1997,14 @@
                     baseData = generateMockTrackingData();
                 }
                 
-                // 为每个用户调整轨迹数据（稍微偏移坐标）
-                const userOffset = {
-                    lat: ((user.id.charCodeAt(0) % 10) - 5) * 0.001, // -0.005 到 0.005
-                    lng: ((user.id.charCodeAt(1) % 10) - 5) * 0.001
-                };
-                
                 const userData = {};
                 Object.keys(baseData).forEach(date => {
                     if (baseData[date] && baseData[date].path) {
                         userData[date] = {
                             ...baseData[date],
                             path: baseData[date].path.map(point => ({
-                                lat: point.lat + userOffset.lat,
-                                lng: point.lng + userOffset.lng,
+                                lat: point.lat,
+                                lng: point.lng,
                                 timestamp: point.timestamp || new Date().toISOString()
                             }))
                         };
@@ -1994,7 +2013,6 @@
                 
                 console.log('📊 生成用户轨迹数据完成，共', Object.keys(userData).length, '个日期');
                 return userData;
-                
             } catch (error) {
                 console.error('❌ 生成用户轨迹数据失败:', error);
                 return generateMockTrackingData();
@@ -2203,23 +2221,6 @@
             
             const mapContainer = document.getElementById('monitoringMap');
             
-            // 初始化地图（如果还没有初始化）
-            if (!monitoringMap) {
-                console.log('🗺️ 初始化地图...');
-                try {
-                    monitoringMap = L.map('monitoringMap').setView([26.7638, 106.046], 13); // 使用实际数据的中心点
-                    
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        attribution: '© OpenStreetMap contributors'
-                    }).addTo(monitoringMap);
-                    
-                    console.log('✅ 地图初始化成功');
-                } catch (error) {
-                    console.error('❌ 地图初始化失败:', error);
-                    return;
-                }
-            }
-            
             // 清除现有轨迹
             if (trackingLayer) {
                 monitoringMap.removeLayer(trackingLayer);
@@ -2251,63 +2252,69 @@
             console.log('✅ 有效轨迹点数:', validPath.length);
             
             try {
+                // 清除现有轨迹
+                if (trackingLayer) {
+                    monitoringMap.removeLayer(trackingLayer);
+                    trackingLayer = null;
+                }
+
                 // 创建新的图层组
                 trackingLayer = L.layerGroup();
-                
-                // 转换路径格式
+
+                // 转换路径格式为 [lat, lng] 数组
                 const latLngs = validPath.map(point => [point.lat, point.lng]);
                 console.log('📍 转换后的坐标:', latLngs);
-                
+
                 // 添加轨迹线
-                const polyline = L.polyline(latLngs, {
-                    color: '#667eea',
-                    weight: 4,
-                    opacity: 0.8
-                });
-                trackingLayer.addLayer(polyline);
-                
-                // 添加起点标记
-                if (validPath.length > 0) {
-                    const startMarker = L.marker([validPath[0].lat, validPath[0].lng], {
-                        icon: L.divIcon({
-                            className: 'custom-marker start-marker',
-                            html: '🚀',
-                            iconSize: [25, 25],
-                            iconAnchor: [12, 12]
-                        })
-                    }).bindPopup(`起点<br>坐标: ${validPath[0].lat.toFixed(4)}, ${validPath[0].lng.toFixed(4)}`);
-                    trackingLayer.addLayer(startMarker);
-                }
-                
-                // 添加终点标记
-                if (validPath.length > 1) {
-                    const lastPoint = validPath[validPath.length - 1];
-                    const endMarker = L.marker([lastPoint.lat, lastPoint.lng], {
-                        icon: L.divIcon({
-                            className: 'custom-marker end-marker',
-                            html: '🏁',
-                            iconSize: [25, 25],
-                            iconAnchor: [12, 12]
-                        })
-                    }).bindPopup(`终点<br>坐标: ${lastPoint.lat.toFixed(4)}, ${lastPoint.lng.toFixed(4)}`);
-                    trackingLayer.addLayer(endMarker);
-                }
-                
-                // 添加到地图
-                trackingLayer.addTo(monitoringMap);
-                
-                // 调整地图视野以适应轨迹
                 if (latLngs.length > 0) {
-                    const bounds = polyline.getBounds();
-                    monitoringMap.fitBounds(bounds, { padding: [20, 20] });
+                    const polyline = L.polyline(latLngs, { color: 'blue', weight: 4, opacity: 0.8 });
+                    trackingLayer.addLayer(polyline);
+
+                    // 添加路径上的所有点标记
+                    validPath.forEach(coord => {
+                        const marker = L.marker([coord.lat, coord.lng]).addTo(trackingLayer);
+                    });
+
+                    // 添加起点标记
+                    const start = validPath[0];
+                    if (start) {
+                        const startMarker = L.marker([start.lat, start.lng], {
+                            icon: L.divIcon({
+                                className: 'custom-marker start-marker',
+                                html: '🚀',
+                                iconSize: [25, 25],
+                                iconAnchor: [12, 12]
+                            })
+                        }).bindPopup(`起点<br>坐标: ${start.lat.toFixed(4)}, ${start.lng.toFixed(4)}`);
+                        trackingLayer.addLayer(startMarker);
+                    }
+
+                    // 添加终点标记
+                    const end = validPath[validPath.length - 1];
+                    if (end && validPath.length > 1) {
+                        const endMarker = L.marker([end.lat, end.lng], {
+                            icon: L.divIcon({
+                                className: 'custom-marker end-marker',
+                                html: '🏁',
+                                iconSize: [25, 25],
+                                iconAnchor: [12, 12]
+                            })
+                        }).bindPopup(`终点<br>坐标: ${end.lat.toFixed(4)}, ${end.lng.toFixed(4)}`);
+                        trackingLayer.addLayer(endMarker);
+                    }
+
+                    // 添加到地图
+                    trackingLayer.addTo(monitoringMap);
+
+                    // 调整地图视野以适应轨迹
+                    monitoringMap.fitBounds(polyline.getBounds(), { padding: [20, 20] });
                     console.log('🗺️ 地图视野已调整到轨迹范围');
                 }
-                
+
                 // 更新轨迹统计
                 updateTrackingStats(dayData);
-                
+
                 console.log('✅ 轨迹地图加载完成，路径点数:', validPath.length);
-                
             } catch (error) {
                 console.error('❌ 地图加载失败:', error);
             }
@@ -2446,6 +2453,23 @@
         // 初始化分析页面
         function initializeAnalyticsPage() {
             loadAnalyticsUserSelector();
+        }
+        
+        // 初始化分析地图
+        function initializeAnalyticsMap() {
+            if (!analyticsMap) {
+                analyticsMap = L.map('pathAnalysisMap').setView([26.7638, 106.046], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap 贡献者'
+                }).addTo(analyticsMap);
+                console.log('🗺️ 分析地图初始化完成');
+            } else {
+                // 如果地图已存在，刷新地图尺寸
+                setTimeout(() => {
+                    analyticsMap.invalidateSize();
+                    console.log('🔄 分析地图尺寸已刷新');
+                }, 50);
+            }
         }
 
         // 加载用户选择器
@@ -2780,14 +2804,6 @@
         // 创建路径分析地图
         function createPathAnalysisMap(allPoints, dates, trackingData) {
             if (!allPoints || allPoints.length === 0) return;
-            
-            // 初始化地图
-            if (!analyticsMap) {
-                analyticsMap = L.map('pathAnalysisMap').setView([26.7638, 106.046], 12);
-                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '© OpenStreetMap contributors'
-                }).addTo(analyticsMap);
-            }
             
             // 清除现有图层
             if (heatmapLayer) {
@@ -3314,6 +3330,7 @@
                 saveUserList();
                 renderUserList();
                 initializeMonitoringPage();
+                initializeAnalyticsPage();
                 updateUserStatistics(); 
                 updateDashboardDeviceStats();// 这会同时更新仪表板
                 hideCapacityWarning();
@@ -3921,6 +3938,16 @@
             }, 100);
         };
 
+        // analyticsMap = L.map('pathAnalysisMap').setView([26.7638, 106.046], 12);
+        // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        //     attribution: '© OpenStreetMap contributors'
+        // }).addTo(analyticsMap);
+
+        // monitoringMap = L.map('monitoringMap').setView([26.7638, 106.046], 13); // 使用实际数据的中心点
+        // L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        //     attribution: '© OpenStreetMap contributors'
+        // }).addTo(monitoringMap);
+
         // 页面加载时初始化 - 添加存储配置同步
         document.addEventListener('DOMContentLoaded', function() {
             loadAdminSettings();
@@ -3928,7 +3955,7 @@
             updateDeviceDisplays();
             updateUserStatistics();
             updateDashboardDeviceStats();
-
+            
             initializeMonitoringPage();
             setupMonitoringComponents();
             initializeAnalyticsPage();
