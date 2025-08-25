@@ -4325,9 +4325,25 @@
             if (!isNaN(numLat) && !isNaN(numLng)) {
               // 检查是否在成都市范围内
               if (isLocationInChengdu(numLat, numLng)) {
-                // 坐标有效且在成都市内，添加到路径
                 if (!mockData[date].path) mockData[date].path = [];
-                mockData[date].path.push([numLat, numLng]);
+                // 检查是否为重复坐标，避免重复添加
+                const lastPoint = mockData[date].path[mockData[date].path.length - 1];
+                const isDuplicate = lastPoint &&
+                  Math.abs(lastPoint[0] - numLat) < 0.0001 &&
+                  Math.abs(lastPoint[1] - numLng) < 0.0001;
+
+                if (!isDuplicate) {
+                  // 添加新的位置点
+                  mockData[date].path.push([numLat, numLng]);
+                  localStorage.setItem('mockData', JSON.stringify(mockData));
+                  // 实时更新地图（不限制日期，显示最新的路径数据）
+                  if (typeof draw === 'function') {
+                    draw(mockData[date].path);
+                  }
+                  console.log(`🗺️ 已同步更新地图位置[${date}]:`, [numLat, numLng]);
+                } else {
+                  console.log('⚠️ 坐标重复，跳过添加');
+                }
 
                 console.log(`✅ 添加有效成都市坐标: [${numLat.toFixed(6)}, ${numLng.toFixed(6)}]`);
               } else {
